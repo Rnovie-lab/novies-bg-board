@@ -1,0 +1,16 @@
+# Data files — don't commit production documents
+*.pdf
+*.xlsx
+*.json
+*.csv
+
+# Keep requirements and config
+!requirements.txt
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
