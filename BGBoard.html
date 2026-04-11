@@ -91,10 +91,11 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .scene-id{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#3a6ea8;background:#0e1824;padding:2px 7px;border-radius:3px}
 .scene-set{font-size:13px;font-weight:700;color:#d0d0d0}
 .scene-desc{font-size:11px;color:#667}
-/* scene header is first row of the roles table — alignment guaranteed by table columns */
-tr.scene-hdr-row>td{background:#22242e;padding:7px 6px;vertical-align:middle}
-tr.scene-hdr-row>.shdr-badge{padding-left:12px;padding-right:4px;white-space:nowrap}
-tr.scene-hdr-row>.shdr-info{padding-left:9px}
+/* scene header spans full width — badge + set stack via flex-wrap */
+tr.scene-hdr-row>td{background:#22242e;padding:6px 6px;vertical-align:middle}
+tr.scene-hdr-row>.shdr-main{padding-left:12px;padding-right:6px}
+.shdr-inner{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.shdr-inner .scene-set{flex:1;min-width:120px;word-break:break-word}
 tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10px}
 
 /* ROLES TABLE */
@@ -105,9 +106,9 @@ tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10
 .roles-table tbody tr td:nth-child(3){font-size:11px;font-weight:400}
 .roles-table colgroup .col-tier{width:72px}
 .roles-table colgroup .col-rate{width:72px}
-.roles-table colgroup .col-hours{width:60px}
+.roles-table colgroup .col-hours{width:72px}
 .roles-table colgroup .col-bumps{width:90px}
-.roles-table colgroup .col-notes{width:60px}
+.roles-table colgroup .col-notes{width:90px}
 .roles-table colgroup .col-reuse{width:auto}
 .roles-table th{text-align:left;padding:6px 9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#778;border-bottom:1px solid #22242e;background:#1e2028}
 .roles-table td{padding:8px 9px;border-bottom:1px solid #1a1c24;vertical-align:middle}
@@ -544,7 +545,8 @@ function renderBreakdown(){
         }).join('')}
       </div>` : '';
 
-    // Scenes
+    // Scenes — column header row shown once per day (first scene with roles)
+    let dayColHdrShown = false;
     const scenesHTML=day.scenes.map(sc=>{
       const roles=(sc.roles||[]);
       const roleRows=roles.map(r=>{
@@ -565,7 +567,16 @@ function renderBreakdown(){
         </tr>`;
       }).join('');
 
-      // Scene header is the first row of the table so set name aligns perfectly with TYPE col
+      // Emit column header only once per day, on the first scene that has roles
+      let colHdrHTML = '';
+      if (roles.length && !dayColHdrShown) {
+        dayColHdrShown = true;
+        colHdrHTML = `<thead><tr>
+            <th></th><th>#</th><th>Type</th><th>Tier</th><th>Rate</th><th>Hours</th>
+            <th>Bumps</th><th>Notes</th><th>Reuse</th>
+          </tr></thead>`;
+      }
+
       return `<div class="scene-block">
         <table class="roles-table">
           <colgroup>
@@ -574,20 +585,14 @@ function renderBreakdown(){
             <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
           </colgroup>
           <tr class="scene-hdr-row">
-            <td class="shdr-badge" colspan="2">${sc.sceneId?`<span class="scene-id">Scene ${esc(sc.sceneId)}</span>`:''}</td>
-            <td class="shdr-info" colspan="5"><span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</td>
+            <td class="shdr-main" colspan="7"><div class="shdr-inner">${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
             <td class="shdr-btns" colspan="2">
               <button class="btn btn-secondary btn-xs" onclick="openSceneModal('${day.id}','${sc.id}')">Edit Scene</button>
               <button class="btn btn-primary btn-xs" onclick="openRoleModal('${day.id}','${sc.id}',null)">+ Role</button>
               <button class="btn btn-danger btn-xs" onclick="deleteScene('${day.id}','${sc.id}')">✕</button>
             </td>
           </tr>
-          ${roles.length?`
-          <thead><tr>
-            <th></th><th>#</th><th>Type</th><th>Tier</th><th>Rate</th><th>Hours</th>
-            <th>Bumps</th><th>Notes</th><th>Reuse</th>
-          </tr></thead>
-          <tbody>${roleRows}</tbody>`
+          ${roles.length?`${colHdrHTML}<tbody>${roleRows}</tbody>`
           :`<tr><td colspan="9" style="font-size:12px;color:#333;padding:8px 12px 10px;font-style:italic">No roles added — click + Role</td></tr>`}
         </table>
       </div>`;

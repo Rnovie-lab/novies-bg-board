@@ -278,8 +278,9 @@ def parse_movie_magic(pdf):
             # Re-insert the space between INT/EXT and the location name
             rest = re.sub(r'\b(INT/EXT|I/E|INT|EXT)([A-Z\'\(])', r'\1 \2', rest)
             # Some schedules put INT/EXT inline: "509 EXT FLAMINGO HOTEL - HABITAT"
-            # Split into clean scene_id + set_text
-            loc_m = re.match(r'^(\S+)\s+(INT/EXT|I/E|INT|EXT)\s+(.+)$', rest, re.I)
+            # Also handles multi-word scene IDs: "522, A523 INT CASINO - TABLE"
+            # Non-greedy (.+?) stops at the FIRST INT/EXT token
+            loc_m = re.match(r'^(.+?)\s+(INT/EXT|I/E|INT|EXT)\s+(.+)$', rest, re.I)
             if loc_m:
                 scene_id = loc_m.group(1)
                 inline_loc = loc_m.group(2).upper() + ' ' + loc_m.group(3).strip()
