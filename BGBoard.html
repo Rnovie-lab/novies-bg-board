@@ -118,6 +118,8 @@ tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10
 .roles-table tr:last-child td{border-bottom:none}
 .edit-icon{display:inline-block;color:#334;font-size:13px;transition:color 0.1s;padding:0 2px}
 .roles-table tbody tr:hover .edit-icon{color:#5ba4e0}
+tr.no-roles-row{cursor:pointer}
+tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
 
 /* BADGES */
 .badge{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:3px;letter-spacing:0.4px}
@@ -593,7 +595,7 @@ function renderBreakdown(){
             </td>
           </tr>
           ${roles.length?`${colHdrHTML}<tbody>${roleRows}</tbody>`
-          :`<tr><td colspan="9" style="font-size:12px;color:#333;padding:8px 12px 10px;font-style:italic">No roles added — click + Role</td></tr>`}
+          :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="9" style="font-size:12px;color:#333;padding:8px 12px 10px;font-style:italic">No roles added — click + Role</td></tr>`}
         </table>
       </div>`;
     }).join('');
