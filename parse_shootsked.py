@@ -102,7 +102,7 @@ def extract_dual_lines(page, x_split=310):
 
 RE_SHOOT_DAY = re.compile(r'^Shoot\s+Day\s+#\s*(\d+)\s+(.*)', re.I)
 RE_END_DAY   = re.compile(r'^End\s+Day\s+#', re.I)
-RE_SCENE_MM  = re.compile(r'^Scene\s+#\s*(.+)$', re.I)
+RE_SCENE_MM  = re.compile(r'^Scene\s+#?\s*(.+)$', re.I)   # "#" optional (some formats omit it)
 
 BG_HEADERS = {'Background Actors', 'Background Actor', 'Background', 'Extras'}
 NON_BG_HEADERS = {
@@ -112,6 +112,8 @@ NON_BG_HEADERS = {
     'Mechanical Effects', 'Sound', 'Camera', 'Electric', 'Grip',
     'Location Notes', 'Production', 'Miscellaneous', 'Additional Labor',
 }
+
+RE_DATE_LINE  = re.compile(r'^\w+\s+\d{1,2},\s+\d{4}$', re.I)   # "May 29, 2025"
 
 RE_PAGE_NOISE = re.compile(
     r'^(Page\s+\d+|Printed\s+on\s|Day\s+Out\s+Of|DOOD|Total\s+Pages|'
@@ -130,6 +132,9 @@ RE_SCENE_HDR = re.compile(r'^Scene\s*#', re.I)  # "Scene # 28 gets Kelly's"
 RE_BG_COUNT_MM = re.compile(r'^(\d+)\s+(.+)$')
 
 
+BG_HEADER_WORDS = tuple(h.lower() for h in BG_HEADERS)
+NON_BG_HEADER_WORDS = tuple(h.lower() for h in NON_BG_HEADERS)
+
 def classify_left_line(left_text):
     s = left_text.strip()
     if not s:                   return 'empty'
@@ -139,12 +144,17 @@ def classify_left_line(left_text):
     if RE_CAST.match(s):        return 'cast_entry'
     if RE_SLUG.match(s):        return 'slug'
     if RE_SCENE_HDR.match(s):   return 'scene_header'
+    # Handle merged lines where BG/Extras header is fused with adjacent column content
+    sl = s.lower()
+    if any(sl.startswith(h + ' ') for h in BG_HEADER_WORDS):   return 'bg_header'
+    if any(sl.startswith(h + ' ') for h in NON_BG_HEADER_WORDS): return 'section_header'
     return 'content'
 
 
+RE_BG_LABEL = re.compile(r'^BG\s+\w', re.I)   # "BG pool goers", "BG w/ cars" etc.
+
 def parse_bg_role_mm(line):
-    """Movie Magic BG line → (count, description) or None.
-    ONLY accepts lines that start with an explicit number — rejects bare text."""
+    """Movie Magic BG line → (count, description) or None."""
     line = line.strip()
     if not line or len(line) < 2: return None
     if RE_PAGE_NOISE.match(line): return None
@@ -152,10 +162,17 @@ def parse_bg_role_mm(line):
     if RE_SLUG.match(line): return None
     if RE_SCENE_HDR.match(line): return None
     if RE_LIKELY_NOTE.match(line): return None
-    m = RE_BG_COUNT_MM.match(line)
+    # Strip props merged from adjacent columns — stop at first prop-like word
+    # e.g. "100 bg Jinx personal props" → "100 bg"
+    # e.g. "Small Group of People BG Pool props" → "Small Group of People"
+    clean = re.split(r'\s+(?=[A-Z][a-z]+\s+props|BG\s+\w+\s+props|\bprops\b|\bwardrobe\b|\bart\s+dept|\bset\s+dress|\bcamera\b|\bvehicles?\b|\blocations?\b)', line, flags=re.I)[0].strip()
+    m = RE_BG_COUNT_MM.match(clean)
     if m:
         return (int(m.group(1)), m.group(2).strip())
-    return None   # no leading count → not a BG role entry
+    # No leading count — accept only if clearly a BG descriptor (starts with "BG ")
+    if RE_BG_LABEL.match(clean) and len(clean) > 4:
+        return (1, clean)
+    return None
 
 
 def make_role(count, desc):
@@ -187,9 +204,13 @@ def parse_movie_magic(pdf):
         if ep_m and not episode:
             episode = ep_m.group(1)
         if (not show_name and len(left) > 6 and
+                not RE_DATE_LINE.match(left) and
                 not RE_SHOOT_DAY.match(left) and not RE_SCENE_MM.match(left) and
                 not left.startswith('Shooting Schedule') and
+                not left.startswith('WHITE SHOOTING') and
                 not left.startswith('DIRECTOR') and
+                not left.startswith('Episode #') and
+                not left.startswith('1st AD') and
                 re.search(r'[A-Za-z]{3,}', left)):
             show_name = left
 
@@ -252,14 +273,28 @@ def parse_movie_magic(pdf):
 
         m_left_scene = RE_SCENE_MM.match(left)
         if m_left_scene:
-            scene_id = m_left_scene.group(1).strip().rstrip(',').strip()
+            rest = m_left_scene.group(1).strip().rstrip(',').strip()
+            # pdfplumber may merge adjacent words: 'EXT FLAMINGO' → 'EXTFLAMINGO'
+            # Re-insert the space between INT/EXT and the location name
+            rest = re.sub(r'\b(INT/EXT|I/E|INT|EXT)([A-Z\'\(])', r'\1 \2', rest)
+            # Some schedules put INT/EXT inline: "509 EXT FLAMINGO HOTEL - HABITAT"
+            # Split into clean scene_id + set_text
+            loc_m = re.match(r'^(\S+)\s+(INT/EXT|I/E|INT|EXT)\s+(.+)$', rest, re.I)
+            if loc_m:
+                scene_id = loc_m.group(1)
+                inline_loc = loc_m.group(2).upper() + ' ' + loc_m.group(3).strip()
+                inline_loc = re.sub(r'\s+Stage\s+\d+.*$', '', inline_loc, flags=re.I).strip()
+                set_for_scene = pending_location if pending_location else inline_loc
+            else:
+                scene_id = rest
+                set_for_scene = pending_location or 'TBD'
             desc = ''
             if full != left:
                 desc = full[len(left):].strip()
             desc = re.sub(r'\s*Stage\s+\d+.*$', '', desc, flags=re.I).strip()
-            start_scene(scene_id, pending_location or 'TBD', desc)
+            start_scene(scene_id, set_for_scene, desc)
             pending_location = ''
-            print(f"    Scene {scene_id}: {pending_location or 'TBD'}")
+            print(f"    Scene {scene_id}: {set_for_scene}")
             continue
 
         if re.match(r'^(INT|EXT)[\s\./]', left, re.I):
