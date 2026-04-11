@@ -201,6 +201,17 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
   #main{padding:0;max-width:100%}
   .print-day{page-break-inside:avoid}
 }
+/* ── Saves list ─────────────────────────────────────────── */
+.saves-list{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto}
+.save-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#1a1c24;border-radius:6px;border:1px solid #252838}
+.save-row-info{flex:1;min-width:0}
+.save-row-name{font-size:13px;font-weight:700;color:#d0d0d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.save-row-meta{font-size:11px;color:#556;margin-top:2px}
+.save-row-actions{display:flex;gap:6px;flex-shrink:0}
+/* ── Toast ──────────────────────────────────────────────── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a7fc4;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;z-index:9999;white-space:nowrap}
+.toast-show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast-error{background:#c0392b}
 </style>
 </head>
 <body>
@@ -209,11 +220,12 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
   <div class="nav-tabs">
     <button class="nav-tab" data-tab="setup">Setup</button>
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
-    <button class="nav-tab" data-tab="export">Export / Print</button>
+    <button class="nav-tab" data-tab="export">Export</button>
   </div>
   <div class="nav-actions">
     <label class="btn btn-primary btn-sm" id="pdf-import-btn" style="cursor:pointer" title="Import a scheduling PDF"><span id="pdf-import-label">↓ Import PDF</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label>
-    <button class="btn btn-success btn-sm" onclick="exportJSON()">↑ Export</button>
+    <button class="btn btn-secondary btn-sm" onclick="openSaveAs()" title="Save current breakdown">💾 Save</button>
+    <button class="btn btn-secondary btn-sm" onclick="openSavesPanel()" title="View saved projects">📂 Projects</button>
     <button class="btn btn-danger btn-sm" onclick="resetAll()">Reset</button>
   </div>
   <div class="nav-show-info" id="nav-info"></div>
@@ -224,6 +236,7 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
 <div id="modal-overlay" onclick="handleOverlayClick(event)">
   <div class="modal-box" id="modal-box"></div>
 </div>
+<div id="toast" class="toast"></div>
 
 <script>
 // ══════════════════════════════════════════════════════════
@@ -283,7 +296,7 @@ const CONTRACT_TYPES = [
 // ══════════════════════════════════════════════════════════
 function defaultState(){
   return {
-    show:{name:'',episode:'',version:'1',preparedBy:'',role:'',contractType:'tv',sagMin:25},
+    show:{name:'',episode:'',version:'1',preparedBy:'',role:'',contractType:'tv',sagMin:25,isSeries:false},
     standins:[],
     days:[]
   };
@@ -293,9 +306,12 @@ let state=(()=>{try{const s=localStorage.getItem('bgboard');return s?JSON.parse(
 if(!state.show.contractType) state.show.contractType='tv';
 if(state.show.sagMin===undefined) state.show.sagMin=25;
 if(state.show.role===undefined) state.show.role='';
+if(state.show.isSeries===undefined) state.show.isSeries=false;
 
 let currentTab='breakdown';
 let expandedDays={};
+// Active save tracking
+let _saveId=null, _saveName=null;
 
 function save(){try{localStorage.setItem('bgboard',JSON.stringify(state));}catch(e){}}
 
@@ -375,7 +391,10 @@ function render(){
 
 function updateNavInfo(){
   const el=document.getElementById('nav-info');
-  el.innerHTML=state.show.name?`<span style="color:#aaa;font-size:12px">${esc(state.show.name)} · Ep ${esc(state.show.episode)}</span>`:'';
+  const savePart=_saveName
+    ?`<span style="color:#3a7bd5;font-weight:700">${esc(_saveName)}</span>`
+    :'<span style="color:#444;font-style:italic">unsaved</span>';
+  el.innerHTML=`<span style="font-size:12px">${savePart}</span>`;
 }
 function updateNavTabs(){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===currentTab));
@@ -441,6 +460,13 @@ function renderSetup(){
       <div class="form-group">
         <label class="lbl">Role</label>
         <select class="sel" onchange="updateShow('role',this.value)">${roleOpts}</select>
+      </div>
+      <div class="form-group">
+        <label class="lbl">Production Type</label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer">
+          <input type="checkbox" ${s.isSeries?'checked':''} onchange="updateShow('isSeries',this.checked)" style="width:16px;height:16px;accent-color:#3a7bd5">
+          <span style="font-size:13px;color:#aaa">TV Series <span style="color:#556;font-size:11px">(enables standin carry-over when duplicating episodes)</span></span>
+        </label>
       </div>
     </div>
   </div>
@@ -635,7 +661,13 @@ function renderBreakdown(){
     </div>`;
   }).join('');
 
+  const titleParts=[state.show.name,state.show.episode?'Ep '+state.show.episode:''].filter(Boolean);
+  const projectTitle=titleParts.length
+    ?`<div style="font-size:17px;font-weight:800;color:#e0e0e0;margin-bottom:6px">${esc(titleParts.join(' · '))}</div>`
+    :'';
+
   return `
+    ${projectTitle}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
       <h2 style="font-size:17px;font-weight:800;color:#e0e0e0">Shooting Days</h2>
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
@@ -1115,6 +1147,184 @@ function saveRole(dayId,sceneId,roleId){
 // ══════════════════════════════════════════════════════════
 // IMPORT / EXPORT / RESET
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// SAVES
+// ══════════════════════════════════════════════════════════
+
+function _nowISO(){ return new Date().toISOString(); }
+
+function _saveLabel(){
+  const s=state.show;
+  const parts=[];
+  if(s.name) parts.push(s.name);
+  if(s.episode) parts.push('Ep '+s.episode);
+  return parts.join(' · ')||'Untitled';
+}
+
+// ── Save As ──────────────────────────────────────────────
+function openSaveAs(){
+  const suggested=_saveName||_saveLabel();
+  openModal(`
+    <div class="modal-title">💾 Save Breakdown</div>
+    <div class="form-group" style="margin-top:14px">
+      <label class="lbl">Save Name</label>
+      <input class="inp" id="save-name-inp" value="${esc(suggested)}" placeholder="e.g. Block 4 Vegas – Draft 1" style="font-size:14px">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doSave()">Save</button>
+    </div>`);
+  setTimeout(()=>{
+    const inp=document.getElementById('save-name-inp');
+    if(inp){inp.focus();inp.select();}
+  },50);
+}
+
+async function doSave(){
+  const inp=document.getElementById('save-name-inp');
+  const name=(inp?.value||'').trim()||_saveLabel();
+  closeModal();
+  const id=_saveId||Math.random().toString(36).slice(2,10);
+  const body={id, name, savedAt:_nowISO(), state};
+  try{
+    const res=await fetch('/saves',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(j.ok){ _saveId=id; _saveName=name; updateNavInfo(); showToast(`Saved: ${name}`); }
+    else showToast('Save failed: '+(j.error||'unknown'),'error');
+  }catch(e){ showToast('Save failed — is the server running?','error'); }
+}
+
+// ── Saves Panel ──────────────────────────────────────────
+async function openSavesPanel(){
+  openModal('<div class="modal-title">📂 Saved Breakdowns</div><div style="text-align:center;padding:20px;color:#555">Loading…</div>');
+  let saves=[];
+  try{
+    const res=await fetch('/saves');
+    const j=await res.json();
+    saves=j.saves||[];
+  }catch(e){ saves=[]; }
+  _renderSavesPanel(saves);
+}
+
+function _renderSavesPanel(saves){
+  const rows=saves.length===0
+    ?'<div style="text-align:center;padding:24px;color:#444;font-style:italic">No saves yet — click 💾 Save to save the current breakdown.</div>'
+    :saves.map(sv=>{
+      const show=sv.show||{};
+      const subtitle=[show.name,show.episode?'Ep '+show.episode:''].filter(Boolean).join(' · ');
+      const date=sv.savedAt?new Date(sv.savedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+      const stats=`${sv.dayCount} day${sv.dayCount!==1?'s':''} · ${sv.roleCount} BG role${sv.roleCount!==1?'s':''}`;
+      return `<div class="save-row" id="saverow-${sv.id}">
+        <div class="save-row-info">
+          <div class="save-row-name">${esc(sv.name)}</div>
+          <div class="save-row-meta">${esc(subtitle)}${date?' · '+date:''} · ${stats}</div>
+        </div>
+        <div class="save-row-actions">
+          <button class="btn btn-primary btn-xs" onclick="loadSave('${sv.id}')">Load</button>
+          <button class="btn btn-secondary btn-xs" onclick="openDuplicateDialog('${sv.id}','${esc(sv.name)}')">Duplicate</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteSave('${sv.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  const html=`
+    <div class="modal-title">📂 Saved Breakdowns</div>
+    <div style="margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" onclick="closeModal();openSaveAs()">💾 Save Current As…</button>
+    </div>
+    <div class="saves-list">${rows}</div>
+    <div style="text-align:right;margin-top:14px">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>`;
+  const box=document.getElementById('modal-box');
+  if(box) box.innerHTML=html;
+}
+
+async function loadSave(id){
+  try{
+    const res=await fetch(`/saves/${id}`);
+    const j=await res.json();
+    if(!j.ok){ showToast('Load failed: '+(j.error||'unknown'),'error'); return; }
+    state=j.state;
+    _saveId=j.state._saveId||id;
+    _saveName=j.state._saveName||'';
+    // Migrate
+    if(!state.show.isSeries) state.show.isSeries=false;
+    save(); expandedDays={}; closeModal(); render(); updateNavInfo();
+    showToast(`Loaded: ${_saveName}`);
+  }catch(e){ showToast('Load failed — is the server running?','error'); }
+}
+
+function openDuplicateDialog(id, name){
+  const isSeries=state.show.isSeries;
+  const suggestedName=name+' (copy)';
+  openModal(`
+    <div class="modal-title">Duplicate Breakdown</div>
+    <div class="form-group" style="margin-top:14px">
+      <label class="lbl">New Name</label>
+      <input class="inp" id="dup-name-inp" value="${esc(suggestedName)}" style="font-size:14px">
+    </div>
+    ${isSeries?`
+    <div style="margin-top:14px;padding:12px;background:#1a1c24;border-radius:6px">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <input type="checkbox" id="dup-carry-si" checked style="margin-top:2px;width:16px;height:16px;accent-color:#3a7bd5;flex-shrink:0">
+        <span style="font-size:13px;color:#aaa;line-height:1.5">
+          <strong style="color:#ccc">Carry standins to new episode</strong><br>
+          <span style="font-size:11px">Copies the standin roster (names, characters, rates) but clears their day-by-day schedule so you start fresh.</span>
+        </span>
+      </label>
+    </div>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doDuplicate('${id}')">Duplicate</button>
+    </div>`);
+  setTimeout(()=>{
+    const inp=document.getElementById('dup-name-inp');
+    if(inp){inp.focus();inp.select();}
+  },50);
+}
+
+async function doDuplicate(originalId){
+  const name=(document.getElementById('dup-name-inp')?.value||'').trim()||'Copy';
+  const carryEl=document.getElementById('dup-carry-si');
+  const carryStandins=carryEl?carryEl.checked:true;
+  closeModal();
+  try{
+    const res=await fetch(`/saves/${originalId}/duplicate`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name, carryStandins, savedAt:_nowISO()})
+    });
+    const j=await res.json();
+    if(j.ok){ showToast(`Duplicated as: ${name}`); }
+    else showToast('Duplicate failed: '+(j.error||'unknown'),'error');
+  }catch(e){ showToast('Duplicate failed — is the server running?','error'); }
+}
+
+async function deleteSave(id){
+  if(!confirm('Delete this save? This cannot be undone.')) return;
+  try{
+    const res=await fetch(`/saves/${id}`,{method:'DELETE'});
+    const j=await res.json();
+    if(j.ok){
+      const row=document.getElementById('saverow-'+id);
+      if(row) row.remove();
+      showToast('Save deleted');
+      if(_saveId===id){_saveId=null;_saveName=null;updateNavInfo();}
+    } else showToast('Delete failed','error');
+  }catch(e){ showToast('Delete failed','error'); }
+}
+
+// ── Toast notification ────────────────────────────────────
+function showToast(msg, type='success'){
+  const t=document.getElementById('toast');
+  if(!t) return;
+  t.textContent=msg;
+  t.className='toast toast-'+type+' toast-show';
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.classList.remove('toast-show'),2800);
+}
+
 function exportJSON(){
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');

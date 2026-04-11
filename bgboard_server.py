@@ -54,6 +54,7 @@ except ImportError:
 # ── HTTP Server ────────────────────────────────────────────────────────────────
 
 SERVER_DIR = Path(__file__).parent
+SAVES_DIR  = SERVER_DIR / 'saves'
 PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
 
@@ -80,6 +81,12 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0].lstrip('/')
         if path == '' or path == 'BGBoard.html':
             path = 'BGBoard.html'
+        # ── Saves API ──────────────────────────────────────────
+        if path == 'saves':
+            self._saves_list(); return
+        if path.startswith('saves/'):
+            self._saves_load(path[6:]); return
+        # ── Static files ───────────────────────────────────────
         file_path = SERVER_DIR / path
         if not file_path.exists() or not file_path.is_file():
             self.send_response(404); self.end_headers()
@@ -98,17 +105,103 @@ class BGBoardHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
+
+    def do_DELETE(self):
+        m = re.match(r'^/saves/([^/]+)$', self.path)
+        if m:
+            self._saves_delete(m.group(1))
+        else:
+            self.send_response(404); self.end_headers()
 
     def do_POST(self):
         if self.path == '/parse-pdf':
             self._handle_parse_pdf()
         elif self.path == '/parse-schedule':
             self._handle_parse_schedule()
+        elif self.path == '/saves':
+            self._saves_create()
+        elif re.match(r'^/saves/[^/]+/duplicate$', self.path):
+            self._saves_duplicate(self.path.split('/')[2])
         else:
             self.send_response(404); self.end_headers()
+
+    # ── Saves API ─────────────────────────────────────────────────────────────
+
+    def _saves_list(self):
+        SAVES_DIR.mkdir(exist_ok=True)
+        saves = []
+        for f in sorted(SAVES_DIR.glob('*.json'), key=lambda x: x.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(f.read_text())
+                saves.append({
+                    'id':        data.get('_saveId', f.stem),
+                    'name':      data.get('_saveName', 'Untitled'),
+                    'savedAt':   data.get('_savedAt', ''),
+                    'show':      data.get('show', {}),
+                    'dayCount':  len(data.get('days', [])),
+                    'roleCount': sum(len(sc.get('roles', []))
+                                     for d in data.get('days', [])
+                                     for sc in d.get('scenes', [])),
+                })
+            except Exception:
+                pass
+        self.send_json({'saves': saves})
+
+    def _saves_load(self, save_id):
+        f = SAVES_DIR / f'{save_id}.json'
+        if not f.exists():
+            self.send_json({'error': 'Not found'}, 404); return
+        self.send_json({'ok': True, 'state': json.loads(f.read_text())})
+
+    def _saves_create(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body   = json.loads(self.rfile.read(length))
+        save_id   = body.get('id') or str(uuid.uuid4())[:8]
+        save_name = body.get('name', 'Untitled')
+        state_data = body.get('state', {})
+        state_data['_saveId']   = save_id
+        state_data['_saveName'] = save_name
+        state_data['_savedAt']  = body.get('savedAt', '')
+        SAVES_DIR.mkdir(exist_ok=True)
+        (SAVES_DIR / f'{save_id}.json').write_text(json.dumps(state_data, indent=2))
+        print(f"  ✓ Saved: '{save_name}' ({save_id})")
+        self.send_json({'ok': True, 'id': save_id})
+
+    def _saves_delete(self, save_id):
+        f = SAVES_DIR / f'{save_id}.json'
+        if f.exists():
+            f.unlink()
+            print(f"  ✓ Deleted save: {save_id}")
+            self.send_json({'ok': True})
+        else:
+            self.send_json({'error': 'Not found'}, 404)
+
+    def _saves_duplicate(self, save_id):
+        import copy
+        f = SAVES_DIR / f'{save_id}.json'
+        if not f.exists():
+            self.send_json({'error': 'Not found'}, 404); return
+        length = int(self.headers.get('Content-Length', 0))
+        body   = json.loads(self.rfile.read(length)) if length > 0 else {}
+        orig      = json.loads(f.read_text())
+        new_state = copy.deepcopy(orig)
+        new_id    = str(uuid.uuid4())[:8]
+        new_state['_saveId']   = new_id
+        new_state['_saveName'] = body.get('name', orig.get('_saveName', 'Untitled') + ' (copy)')
+        new_state['_savedAt']  = body.get('savedAt', '')
+        # If caller opts out of standins, wipe roster + per-day overrides
+        if not body.get('carryStandins', True):
+            new_state['standins'] = []
+            for day in new_state.get('days', []):
+                day['standinOff']   = {}
+                day['standinHours'] = {}
+        SAVES_DIR.mkdir(exist_ok=True)
+        (SAVES_DIR / f'{new_id}.json').write_text(json.dumps(new_state, indent=2))
+        print(f"  ✓ Duplicated '{orig.get('_saveName')}' → '{new_state['_saveName']}' ({new_id})")
+        self.send_json({'ok': True, 'id': new_id, 'state': new_state})
 
     def _handle_parse_pdf(self):
         try:
