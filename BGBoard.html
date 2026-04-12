@@ -513,6 +513,9 @@ function renderSetup(){
     ${state.standins.length===0?`<div class="empty"><div class="empty-icon">👤</div>No stand-ins yet — add the recurring stand-ins for this production.</div>`:''}
     ${siList}
     <div class="hint" style="margin-top:8px">Stand-ins are assumed working every day. Mark them OFF in the Breakdown per day as needed.</div>
+  </div>
+  <div id="usage-counter" style="text-align:center;margin-top:20px;font-size:11px;color:#3a3f5c;letter-spacing:0.08em">
+    ${state._usageCount ? `sessions: ${state._usageCount}` : ''}
   </div>`;
 }
 
@@ -678,6 +681,7 @@ function renderBreakdown(){
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div style="font-size:20px;font-weight:800;color:#e0e0e0">${esc(titleParts.join(' · '))}</div>
+      <button onclick="reportIssue()" style="background:#c0392b;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.03em">⚑ Report Issue</button>
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
@@ -1695,11 +1699,40 @@ function resetAll(){
 }
 
 // ══════════════════════════════════════════════════════════
+// REPORT ISSUE
+// ══════════════════════════════════════════════════════════
+function reportIssue(){
+  const subject=encodeURIComponent("BG Board Issue Report");
+  const body=encodeURIComponent(
+    `Issue description:\n\n\n` +
+    `Show: ${state.show.name||'(none)'}\n` +
+    `Days: ${state.days.length}\n` +
+    `App version: BGBoard (local)\n`
+  );
+  window.location.href=`mailto:rossnovie@mac.com?subject=${subject}&body=${body}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// USAGE COUNTER
+// ══════════════════════════════════════════════════════════
+async function incrementUsage(){
+  try{
+    const res=await fetch('/usage/increment',{method:'POST'});
+    const j=await res.json();
+    state._usageCount=j.count;
+    // Update counter display if setup tab is visible
+    const el=document.getElementById('usage-counter');
+    if(el) el.textContent=`sessions: ${j.count}`;
+  }catch(e){/* server not running or Railway — silent fail */}
+}
+
+// ══════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════
 document.querySelectorAll('.nav-tab').forEach(t=>{
   t.addEventListener('click',()=>{currentTab=t.dataset.tab;render();});
 });
+incrementUsage();
 render();
 </script>
 </body>

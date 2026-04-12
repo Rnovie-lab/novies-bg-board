@@ -53,10 +53,22 @@ except ImportError:
 
 # ── HTTP Server ────────────────────────────────────────────────────────────────
 
-SERVER_DIR = Path(__file__).parent
-SAVES_DIR  = SERVER_DIR / 'saves'
+SERVER_DIR   = Path(__file__).parent
+SAVES_DIR    = SERVER_DIR / 'saves'
+USAGE_FILE   = SERVER_DIR / 'usage_counter.json'
 PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
+
+def _read_usage():
+    if USAGE_FILE.exists():
+        try:
+            return json.loads(USAGE_FILE.read_text()).get('count', 0)
+        except Exception:
+            pass
+    return 0
+
+def _write_usage(count):
+    USAGE_FILE.write_text(json.dumps({'count': count}))
 
 class BGBoardHandler(BaseHTTPRequestHandler):
 
@@ -86,6 +98,8 @@ class BGBoardHandler(BaseHTTPRequestHandler):
             self._saves_list(); return
         if path.startswith('saves/'):
             self._saves_load(path[6:]); return
+        if path == 'usage':
+            self.send_json({'count': _read_usage()}); return
         # ── Static files ───────────────────────────────────────
         file_path = SERVER_DIR / path
         if not file_path.exists() or not file_path.is_file():
@@ -125,6 +139,10 @@ class BGBoardHandler(BaseHTTPRequestHandler):
             self._saves_create()
         elif re.match(r'^/saves/[^/]+/duplicate$', self.path):
             self._saves_duplicate(self.path.split('/')[2])
+        elif self.path == '/usage/increment':
+            count = _read_usage() + 1
+            _write_usage(count)
+            self.send_json({'count': count})
         else:
             self.send_response(404); self.end_headers()
 
