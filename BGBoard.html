@@ -235,6 +235,7 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
     <button class="nav-tab" data-tab="export">Export</button>
   </div>
+  <button onclick="reportIssue()" style="background:#8b1a1a;color:#ffaaaa;border:none;border-radius:5px;padding:4px 11px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.05em;flex-shrink:0;margin:0 14px">⚑ Report Issue</button>
   <div class="nav-actions">
     <label class="btn btn-primary btn-sm" id="pdf-import-btn" style="cursor:pointer" title="Import a scheduling PDF"><span id="pdf-import-label">↓ Import PDF</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label>
     <button class="btn btn-secondary btn-sm" onclick="openSaveAs()" title="Save current breakdown">💾 Save</button>
@@ -681,7 +682,6 @@ function renderBreakdown(){
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div style="font-size:20px;font-weight:800;color:#e0e0e0">${esc(titleParts.join(' · '))}</div>
-      <button onclick="reportIssue()" style="background:#c0392b;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.03em">⚑ Report Issue</button>
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
