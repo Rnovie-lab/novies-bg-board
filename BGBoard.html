@@ -11,8 +11,8 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit}
 input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 
 /* NAV */
-#nav{background:#14151b;border-bottom:2px solid #2a7fc4;display:flex;align-items:center;padding:0 20px;height:54px;gap:0;position:sticky;top:0;z-index:50}
-.nav-brand{font-size:20px;font-weight:900;color:#2a7fc4;letter-spacing:3px;text-transform:uppercase;margin-right:24px;flex-shrink:0}
+#nav{background:#14151b;border-bottom:2px solid #2a7fc4;display:flex;align-items:center;padding:0 28px;height:78px;gap:0;position:sticky;top:0;z-index:50}
+.nav-brand{display:flex;align-items:center;margin-right:16px;flex-shrink:0}
 .nav-tabs{display:flex;gap:2px;flex:1}
 .nav-tab{padding:8px 16px;border-radius:4px;font-size:12px;font-weight:700;color:#555;background:transparent;letter-spacing:0.8px;text-transform:uppercase;border:none;cursor:pointer;transition:color 0.15s}
 .nav-tab:hover{color:#ccc;background:#1e1f28}
@@ -59,7 +59,7 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .contract-box .rule strong{color:#457b9d}
 
 /* DAY BLOCKS */
-.day-block{background:#2a2c36;border:1px solid #33354a;border-radius:8px;margin-bottom:20px;overflow:hidden}
+.day-block{background:#2a2c36;border:1px solid #4a4d66;border-radius:8px;margin-bottom:20px;overflow:hidden}
 .day-hdr{background:linear-gradient(to right,#1d4068,#182848);border-left:5px solid #3a90d4;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
 .day-hdr-left{display:flex;align-items:center;gap:12px}
 .day-label{font-size:15px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1.2px}
@@ -73,17 +73,17 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .day-body.open{display:block}
 
 /* STAND-INS IN DAY */
-.si-section{background:#181e2c;border-left:3px solid #457b9d;border-radius:0 4px 4px 0;padding:10px 14px;margin-bottom:14px}
-.si-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#457b9d;margin-bottom:8px}
-.si-day-row{display:grid;grid-template-columns:180px 1fr 90px 100px 70px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #0f1520}
+.si-section{background:#181e2c;border-left:3px solid #457b9d;border-radius:0 4px 4px 0;padding:6px 14px;margin-top:10px}
+.si-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#457b9d;margin-bottom:4px}
+.si-day-row{display:grid;grid-template-columns:160px 1fr 80px 90px 60px;gap:8px;align-items:center;padding:1px 0;border-bottom:1px solid #0f1520}
 .si-day-row:last-child{border-bottom:none}
-.si-day-name{font-size:13px;font-weight:600;color:#ccc}
-.si-day-char{font-size:12px;color:#555}
-.si-hrs-input{width:68px;background:#22242e;border:1px solid #33354a;border-radius:3px;padding:4px 8px;color:#e0e0e0;font-size:13px;text-align:center}
+.si-day-name{font-size:11px;font-weight:600;color:#ccc}
+.si-day-char{font-size:10px;color:#555}
+.si-hrs-input{width:52px;background:#22242e;border:1px solid #33354a;border-radius:3px;padding:1px 6px;color:#e0e0e0;font-size:11px;text-align:center}
 .si-hrs-input:disabled{opacity:0.3}
-.si-off-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#666;cursor:pointer;user-select:none}
-.si-off-toggle input{accent-color:#2a7fc4;cursor:pointer}
-.si-working{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.si-off-toggle{display:flex;align-items:center;gap:4px;font-size:11px;color:#666;cursor:pointer;user-select:none}
+.si-off-toggle input{accent-color:#2a7fc4;cursor:pointer;width:12px;height:12px}
+.si-working{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
 .si-working.on{color:#52b788}.si-working.off{color:#444}
 
 /* SCENE */
@@ -208,6 +208,19 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
 .save-row-name{font-size:13px;font-weight:700;color:#d0d0d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .save-row-meta{font-size:11px;color:#556;margin-top:2px}
 .save-row-actions{display:flex;gap:6px;flex-shrink:0}
+/* ── Diff modal ─────────────────────────────────────────── */
+.diff-list{max-height:55vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.diff-section{display:flex;flex-direction:column;gap:4px}
+.diff-section-hdr{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:4px 0 6px;border-bottom:1px solid #252838;margin-bottom:4px}
+.diff-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:#1a1c24;border-radius:5px;cursor:pointer;border:1px solid transparent}
+.diff-row:hover{border-color:#2a2c3a}
+.diff-row input[type=checkbox]{margin-top:2px;flex-shrink:0;width:15px;height:15px;accent-color:#3a7bd5}
+.diff-row-body{flex:1;min-width:0}
+.diff-row-title{font-size:12px;font-weight:700;color:#ccc;line-height:1.4}
+.diff-day-badge{font-size:10px;color:#556;font-weight:400;margin-left:4px}
+.diff-old{font-size:11px;color:#e74c3c;margin-top:3px;font-style:italic}
+.diff-note{font-size:10px;color:#445;margin-top:3px}
+.diff-unchanged{font-size:11px;color:#334;padding:8px 10px;border-top:1px solid #1e2028;margin-top:4px}
 /* ── Toast ──────────────────────────────────────────────── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a7fc4;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;z-index:9999;white-space:nowrap}
 .toast-show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -216,7 +229,7 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
 </head>
 <body>
 <div id="nav">
-  <div class="nav-brand">Novie's BG Board</div>
+  <div class="nav-brand"><img src="bgboard-logo-master.png" alt="Novie's BG Board" style="height:66px;display:block;border-radius:8px"></div>
   <div class="nav-tabs">
     <button class="nav-tab" data-tab="setup">Setup</button>
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
@@ -642,9 +655,9 @@ function renderBreakdown(){
         </div>
       </div>
       <div class="day-body ${expanded?'open':''}" id="day-body-${day.id}">
-        ${siSection}
         ${scenesHTML}
         ${day.scenes.length===0?`<div class="empty" style="padding:18px"><div class="empty-icon">🎬</div>No scenes yet.</div>`:''}
+        ${siSection}
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm" onclick="openSceneModal('${day.id}',null)">+ Add Scene</button>
           <button class="btn btn-primary btn-sm" onclick="openQuickBGModal('${day.id}')" title="Quickly type BG without entering each scene first">⚡ Quick BG Entry</button>
@@ -662,14 +675,9 @@ function renderBreakdown(){
   }).join('');
 
   const titleParts=[state.show.name,state.show.episode?'Ep '+state.show.episode:''].filter(Boolean);
-  const projectTitle=titleParts.length
-    ?`<div style="font-size:17px;font-weight:800;color:#e0e0e0;margin-bottom:6px">${esc(titleParts.join(' · '))}</div>`
-    :'';
-
   return `
-    ${projectTitle}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <h2 style="font-size:17px;font-weight:800;color:#e0e0e0">Shooting Days</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:20px;font-weight:800;color:#e0e0e0">${esc(titleParts.join(' · '))}</div>
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
@@ -736,8 +744,10 @@ function renderExport(){
   return `
   <div class="print-hdr-block">
     <div class="print-show-title">${s.episode?esc(s.episode)+' ':''} Extras Breakdown</div>
-    ${s.name?`<div class="print-meta"><strong>Show:</strong> ${esc(s.name)} &nbsp;|&nbsp; <strong>Version:</strong> ${esc(s.version||'—')}</div>`:''}
-    ${s.preparedBy?`<div class="print-meta">Prepared by: ${esc(s.preparedBy)}${s.role?' · '+esc(s.role):''}</div>`:''}
+    <div class="print-meta" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+      <span>${s.name?`<strong>Show:</strong> ${esc(s.name)} &nbsp;|&nbsp; <strong>Version:</strong> ${esc(s.version||'—')}`:''}</span>
+      ${s.preparedBy?`<span><strong>Prepared by:</strong> ${esc(s.preparedBy)}${s.role?' · '+esc(s.role):''}</span>`:''}
+    </div>
   </div>
   ${state.days.length===0?`<div class="empty card"><div class="empty-icon">📄</div>No data yet.</div>`:''}
   ${dayBlocks}
@@ -1373,6 +1383,230 @@ function updatePdfBtn(){
   }
 }
 
+// ══════════════════════════════════════════════════════════
+// DIFF-MERGE
+// ══════════════════════════════════════════════════════════
+
+function _applyFreshImport(s){
+  state=s;
+  if(state.show.isSeries===undefined) state.show.isSeries=false;
+  _saveId=null; _saveName=null;
+  save(); currentTab='breakdown'; render(); updateNavInfo();
+  showToast(`Imported: ${s.days.length} days`);
+}
+
+function _sceneKey(id){ return (id||'').trim().toLowerCase(); }
+
+function computeDiff(current, incoming){
+  // Build lookup: sceneKey → {scene, day} for current breakdown
+  const curMap={};
+  current.days.forEach(day=>{
+    (day.scenes||[]).forEach(sc=>{
+      curMap[_sceneKey(sc.sceneId)]={scene:sc, day};
+    });
+  });
+
+  // Build lookup for incoming schedule
+  const newMap={};
+  incoming.days.forEach(day=>{
+    (day.scenes||[]).forEach(sc=>{
+      newMap[_sceneKey(sc.sceneId)]={scene:sc, day};
+    });
+  });
+
+  const added=[], removed=[], moved=[], changed=[], unchanged=[];
+
+  // Check every scene in the incoming schedule
+  for(const [key, {scene:nSc, day:nDay}] of Object.entries(newMap)){
+    if(!curMap[key]){
+      added.push({sceneId:nSc.sceneId, scene:nSc, day:nDay});
+    } else {
+      const {scene:cSc, day:cDay}=curMap[key];
+      const dayMoved = cDay.dayNumber !== nDay.dayNumber;
+      const setChanged = (cSc.set||'').trim() !== (nSc.set||'').trim();
+      const descChanged = (cSc.desc||'').trim() !== (nSc.desc||'').trim();
+      if(dayMoved){
+        moved.push({sceneId:nSc.sceneId, scene:nSc, newDay:nDay, oldDay:cDay, curScene:cSc});
+      } else if(setChanged||descChanged){
+        changed.push({sceneId:nSc.sceneId, scene:nSc, day:nDay, curScene:cSc, setChanged, descChanged, oldSet:cSc.set, oldDesc:cSc.desc});
+      } else {
+        unchanged.push(nSc.sceneId);
+      }
+    }
+  }
+
+  // Scenes in current that are NOT in the incoming schedule
+  for(const [key, {scene:cSc, day:cDay}] of Object.entries(curMap)){
+    if(!newMap[key]){
+      removed.push({sceneId:cSc.sceneId, scene:cSc, day:cDay});
+    }
+  }
+
+  return {added, removed, moved, changed, unchanged,
+          totalChanges: added.length+removed.length+moved.length+changed.length};
+}
+
+function showDiffModal(diff, incoming){
+  if(diff.totalChanges===0){
+    openModal(`
+      <div class="modal-title">📋 No Changes Found</div>
+      <p style="color:#888;margin:16px 0">The new schedule matches your current breakdown — no scenes were added, removed, or changed.</p>
+      <div style="text-align:right"><button class="btn btn-ghost" onclick="closeModal()">OK</button></div>`);
+    return;
+  }
+
+  const s=incoming.show;
+  const showLabel=`${s.name||''}${s.episode?' · Ep '+s.episode:''}`;
+
+  function diffSection(items, type){
+    if(!items.length) return '';
+    const labels={
+      added:'NEW — will be added',
+      removed:'DROPPED from schedule',
+      moved:'MOVED to different day',
+      changed:'LOCATION / DESC CHANGED'
+    };
+    const color={added:'#2ecc71',removed:'#e74c3c',moved:'#e9c46a',changed:'#3a7bd5'};
+    const rows=items.map((item,i)=>{
+      const id=`diff-${type}-${i}`;
+      const dayLabel=item.day?.date||item.newDay?.date||'';
+      const dayNum=item.day?.dayNumber??item.newDay?.dayNumber??'';
+      let detail='';
+      if(type==='changed'){
+        if(item.setChanged) detail+=`<div class="diff-old">was: ${esc(item.oldSet)}</div>`;
+        if(item.descChanged) detail+=`<div class="diff-old">desc was: ${esc(item.oldDesc||'—')}</div>`;
+        detail+=`<div class="diff-note">Your BG roles, bumps & notes are preserved</div>`;
+      }
+      if(type==='moved'){
+        detail+=`<div class="diff-old">was: Day ${item.oldDay.dayNumber} (${item.oldDay.date||''})</div>`;
+      }
+      if(type==='removed'){
+        detail+=`<div class="diff-note">Uncheck to keep in your breakdown</div>`;
+      }
+      return `<label class="diff-row" for="${id}">
+        <input type="checkbox" id="${id}" data-diff-type="${type}" data-diff-idx="${i}" checked onchange="updateDiffCount()">
+        <div class="diff-row-body">
+          <div class="diff-row-title">Sc ${esc(item.sceneId)} &nbsp;<span style="color:#888;font-weight:400">${esc(item.scene?.set||item.curScene?.set||'')}</span> <span class="diff-day-badge">Day ${dayNum}${dayLabel?' · '+dayLabel:''}</span></div>
+          ${detail}
+        </div>
+      </label>`;
+    }).join('');
+
+    return `<div class="diff-section">
+      <div class="diff-section-hdr" style="color:${color[type]}">${labels[type]} (${items.length})</div>
+      ${rows}
+    </div>`;
+  }
+
+  const unchangedNote=diff.unchanged.length
+    ?`<div class="diff-unchanged">${diff.unchanged.length} scene${diff.unchanged.length!==1?'s':''} unchanged — your data fully preserved</div>`:'';
+
+  const html=`
+    <div class="modal-title">📋 New Draft — Review Changes</div>
+    <div style="font-size:12px;color:#556;margin-bottom:14px">${esc(showLabel)} &nbsp;·&nbsp; ${incoming.days.length} days &nbsp;·&nbsp; ${(incoming.days||[]).reduce((n,d)=>n+(d.scenes?.length||0),0)} scenes</div>
+    <div class="diff-list" id="diff-list">
+      ${diffSection(diff.added,'added')}
+      ${diffSection(diff.removed,'removed')}
+      ${diffSection(diff.moved,'moved')}
+      ${diffSection(diff.changed,'changed')}
+      ${unchangedNote}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+      <button class="btn btn-danger" onclick="closeModal()">Cancel — keep current</button>
+      <button class="btn btn-primary" id="diff-apply-btn" onclick="applyDiff(diffPayload)">Apply <span id="diff-count">${diff.totalChanges}</span> Changes</button>
+    </div>`;
+
+  // Store diff+incoming for the apply function
+  window.diffPayload={diff, incoming};
+  openModal(html);
+}
+
+function updateDiffCount(){
+  const checked=document.querySelectorAll('#diff-list input[type=checkbox]:checked').length;
+  const btn=document.getElementById('diff-apply-btn');
+  const cnt=document.getElementById('diff-count');
+  if(cnt) cnt.textContent=checked;
+  if(btn) btn.disabled=checked===0;
+}
+
+function applyDiff({diff, incoming}){
+  // Deep clone current state as base
+  const next=JSON.parse(JSON.stringify(state));
+
+  // Collect which items are checked by type+index
+  function isChecked(type, idx){
+    const el=document.getElementById(`diff-${type}-${idx}`);
+    return el?el.checked:true;
+  }
+
+  // Helper: find or create a day in next by dayNumber
+  function findOrCreateDay(dayNumber, templateDay){
+    let d=next.days.find(x=>x.dayNumber===dayNumber);
+    if(!d){
+      d={id:uid(), dayNumber, date:templateDay.date||'', scenes:[], standinOff:{}, standinHours:{}};
+      next.days.push(d);
+      next.days.sort((a,b)=>a.dayNumber-b.dayNumber);
+    }
+    return d;
+  }
+
+  // ADDED: insert new scenes (with their imported roles)
+  diff.added.forEach((item,i)=>{
+    if(!isChecked('added',i)) return;
+    const day=findOrCreateDay(item.day.dayNumber, item.day);
+    day.scenes.push(JSON.parse(JSON.stringify(item.scene)));
+  });
+
+  // REMOVED: delete scenes from current state
+  diff.removed.forEach((item,i)=>{
+    if(!isChecked('removed',i)) return;
+    const key=_sceneKey(item.sceneId);
+    next.days.forEach(d=>{ d.scenes=d.scenes.filter(sc=>_sceneKey(sc.sceneId)!==key); });
+  });
+
+  // MOVED: move scene to new day (keep existing roles/notes)
+  diff.moved.forEach((item,i)=>{
+    if(!isChecked('moved',i)) return;
+    const key=_sceneKey(item.sceneId);
+    let movedScene=null;
+    // Remove from old day
+    next.days.forEach(d=>{
+      const idx=d.scenes.findIndex(sc=>_sceneKey(sc.sceneId)===key);
+      if(idx>=0){ movedScene=d.scenes.splice(idx,1)[0]; }
+    });
+    if(movedScene){
+      movedScene.set=item.scene.set; // update location too
+      const newDay=findOrCreateDay(item.newDay.dayNumber, item.newDay);
+      newDay.scenes.push(movedScene);
+    }
+  });
+
+  // CHANGED: update set/desc only — keep all roles, bumps, notes intact
+  diff.changed.forEach((item,i)=>{
+    if(!isChecked('changed',i)) return;
+    const key=_sceneKey(item.sceneId);
+    next.days.forEach(d=>{
+      const sc=d.scenes.find(s=>_sceneKey(s.sceneId)===key);
+      if(sc){
+        if(item.setChanged) sc.set=item.scene.set;
+        if(item.descChanged) sc.desc=item.scene.desc;
+      }
+    });
+  });
+
+  // Update show info (name/episode from new draft), keep user settings
+  next.show.name=incoming.show.name||next.show.name;
+  next.show.episode=incoming.show.episode||next.show.episode;
+
+  // Remove empty days (no scenes left after removals)
+  next.days=next.days.filter(d=>d.scenes.length>0);
+
+  state=next;
+  _saveId=null; _saveName=null; // mark as unsaved after merge
+  save(); closeModal(); currentTab='breakdown'; render(); updateNavInfo();
+  showToast('Merge applied — breakdown updated');
+}
+
 async function importPDF(e){
   const f=e.target.files[0];
   e.target.value='';
@@ -1428,26 +1662,22 @@ async function importPDF(e){
       return;
     }
     const s=data.state;
-    console.log('Full response:', JSON.stringify(data, null, 2));
-    console.log('State object:', s);
-    console.log('Days array:', s.days);
     const dayCount=s.days?.length||0;
     const sceneCount=(s.days||[]).reduce((n,d)=>n+(d.scenes?.length||0),0);
     const roleCount=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).reduce((m,sc)=>m+(sc.roles?.length||0),0),0);
-    console.log('Counts:', {dayCount, sceneCount, roleCount});
 
-    if(!confirm(
-      `Import shootsked?\n\n`+
-      `Show: ${s.show?.name||'?'} Ep ${s.show?.episode||'?'}\n`+
-      `${dayCount} shooting days · ${sceneCount} scenes · ${roleCount} BG role entries\n\n`+
-      `This will REPLACE your current data.`
-    )) return;
-
-    state=s;
-    save();
-    currentTab='breakdown';
-    render();
-    alert(`✓ Imported ${dayCount} days, ${sceneCount} scenes.`);
+    if(state.days.length===0){
+      // Fresh import — no existing data, just confirm and apply
+      if(!confirm(
+        `Import schedule?\n\n`+
+        `${s.show?.name||'?'}${s.show?.episode?' · Ep '+s.show.episode:''}\n`+
+        `${dayCount} shooting days · ${sceneCount} scenes · ${roleCount} BG roles`
+      )) return;
+      _applyFreshImport(s);
+    } else {
+      // Existing breakdown — run diff, let user review
+      showDiffModal(computeDiff(state, s), s);
+    }
   }catch(err){
     alert('PDF import failed: '+err.message);
   }finally{
