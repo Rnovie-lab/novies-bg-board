@@ -709,7 +709,14 @@ def parse_shootsked(pdf_path):
 
         # OCR path: text baked as vectors — pdfplumber can't read it
         # Normal schedules have 800–2000 chars/page; path-rendered PDFs have <200
-        if avg_chars < 200 and fmt == 'movie_magic' and _ocr_available():
+        if avg_chars < 200 and fmt == 'movie_magic':
+            if not _ocr_available():
+                raise RuntimeError(
+                    "This PDF uses path-rendered text (non-selectable) and requires OCR to parse, "
+                    "but OCR tools (tesseract / pdf2image) are not installed on this server.\n\n"
+                    "To fix: re-export the schedule from your scheduling software as a standard PDF "
+                    "(look for 'Export as PDF' rather than 'Print to PDF'), then try importing again."
+                )
             ocr_pages = extract_text_via_ocr(pdf_path)
             if ocr_pages:
                 days, show_name, episode = parse_movie_magic_from_ocr(ocr_pages)
