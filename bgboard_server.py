@@ -60,12 +60,13 @@ PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
 
 def _read_usage():
+    offset = int(os.environ.get('USAGE_OFFSET', 0))
     if USAGE_FILE.exists():
         try:
-            return json.loads(USAGE_FILE.read_text()).get('count', 0)
+            return json.loads(USAGE_FILE.read_text()).get('count', 0) + offset
         except Exception:
             pass
-    return 0
+    return offset
 
 def _write_usage(count):
     USAGE_FILE.write_text(json.dumps({'count': count}))

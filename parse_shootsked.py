@@ -550,6 +550,146 @@ def parse_ep_oneline(pdf):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OCR FALLBACK — for PDFs with text rendered as vector paths
+# ══════════════════════════════════════════════════════════════════════════════
+
+RE_SCENE_OCR = re.compile(
+    r'^Scene\s*#\s*(\S+)\s+(INT/EXT|INT|EXT)\s+(.+)',
+    re.I
+)
+
+def _ocr_available():
+    try:
+        from pdf2image import convert_from_path  # noqa
+        import pytesseract                        # noqa
+        return True
+    except ImportError:
+        return False
+
+
+def extract_text_via_ocr(pdf_path, dpi=150):
+    """Rasterise PDF pages and OCR them. Returns list of page text strings or None."""
+    try:
+        from pdf2image import convert_from_path
+        import pytesseract
+        print("  Using OCR fallback (pdf has path-rendered text) …")
+        images = convert_from_path(pdf_path, dpi=dpi)
+        texts = []
+        for i, img in enumerate(images, 1):
+            texts.append(pytesseract.image_to_string(img))
+            if i % 10 == 0:
+                print(f"  OCR: {i}/{len(images)} pages done")
+        return texts
+    except Exception as e:
+        print(f"  OCR failed: {e}")
+        return None
+
+
+def parse_movie_magic_from_ocr(ocr_pages):
+    """Parse Movie Magic schedule from OCR-extracted text lines."""
+    all_lines = []
+    for page_text in ocr_pages:
+        for line in page_text.split('\n'):
+            line = line.strip()
+            if line:
+                all_lines.append(line)
+
+    days       = []
+    current_day   = None
+    current_scene = None
+    in_bg_section = False
+    show_name = ''
+    episode   = ''
+
+    # Grab show name / episode from opening lines
+    SKIP_RE = re.compile(
+        r'^(Shoot\s+Day|Scene\s*#|Shooting\s+Schedule|PRELIM|FINAL|BASED\s+ON|'
+        r'Printed\s+on|Page\s+\d+|\*\*)',
+        re.I
+    )
+    for line in all_lines[:30]:
+        if SKIP_RE.match(line): continue
+        ep_m = re.search(r'Ep#?\s*(\d{2,3})', line, re.I)
+        if ep_m and not episode:
+            episode = ep_m.group(1)
+        if (not show_name and 6 < len(line) < 80
+                and re.search(r'[A-Za-z]{4,}', line)
+                and not RE_DATE_LINE.match(line)):
+            show_name = line
+
+    def commit_scene():
+        if current_scene is not None and current_day is not None:
+            current_day['scenes'].append(current_scene)
+
+    for line in all_lines:
+        # ── Day header ──────────────────────────────────────────────────────
+        m = RE_SHOOT_DAY.match(line)
+        if m:
+            commit_scene()
+            current_scene = None
+            in_bg_section = False
+            d = {
+                'id': uid(), 'dayNumber': int(m.group(1)),
+                'date': parse_date(m.group(2)), 'scenes': [],
+                'standinOff': {}, 'standinHours': {}
+            }
+            days.append(d)
+            current_day = d
+            print(f"  Day {m.group(1)}: {parse_date(m.group(2)) or m.group(2)}")
+            continue
+
+        if RE_END_DAY.match(line):
+            commit_scene()
+            current_scene = None
+            in_bg_section = False
+            continue
+
+        if current_day is None:
+            continue
+
+        # ── Noise ───────────────────────────────────────────────────────────
+        if RE_PAGE_NOISE.match(line):
+            continue
+
+        # ── Scene header: "Scene# 115 EXT FARM - LATER DAY 3/8" ────────────
+        m = RE_SCENE_OCR.match(line)
+        if m:
+            commit_scene()
+            in_bg_section = False
+            scene_id = m.group(1).strip().rstrip(',')
+            ie       = m.group(2).upper()
+            rest     = m.group(3).strip()
+            # Strip trailing page-fraction "DAY 3/8", "DAY 3", or OCR artefact "DAY 38"
+            rest = re.sub(r'\s+(?:DAY|NIGHT|D|N)\s+\d+(?:/\d+)?\s*$', '', rest, flags=re.I).strip()
+            location = ie + ' ' + rest
+            current_scene = {
+                'id': uid(), 'sceneId': scene_id,
+                'set': location, 'desc': '', 'roles': []
+            }
+            print(f"    Scene {scene_id}: {location}")
+            continue
+
+        # ── Section headers ─────────────────────────────────────────────────
+        sl = line.lower()
+        if any(sl == h.lower() or sl.startswith(h.lower() + ' ') for h in BG_HEADERS):
+            in_bg_section = True
+            continue
+        if any(sl == h.lower() or sl.startswith(h.lower() + ' ') for h in NON_BG_HEADERS):
+            in_bg_section = False
+            continue
+
+        # ── BG role lines ────────────────────────────────────────────────────
+        if in_bg_section and current_scene is not None:
+            result = parse_bg_role_mm(line)
+            if result:
+                count, desc = result
+                current_scene['roles'].append(make_role(count, desc))
+
+    commit_scene()
+    return days, show_name, episode
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY — auto-detect format
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -558,10 +698,25 @@ def parse_shootsked(pdf_path):
 
     with pdfplumber.open(pdf_path) as pdf:
         print(f"Pages: {len(pdf.pages)}")
+
+        # Detect if PDF has path-rendered text (very low char density)
+        sample_pages = pdf.pages[:min(5, len(pdf.pages))]
+        avg_chars = sum(len(p.chars) for p in sample_pages) / len(sample_pages)
+        print(f"Avg chars/page (sample): {avg_chars:.0f}")
+
         fmt = detect_format(pdf)
         print(f"Detected format: {fmt}")
 
-        if fmt == 'ep_oneline':
+        # OCR path: text baked as vectors — pdfplumber can't read it
+        # Normal schedules have 800–2000 chars/page; path-rendered PDFs have <200
+        if avg_chars < 200 and fmt == 'movie_magic' and _ocr_available():
+            ocr_pages = extract_text_via_ocr(pdf_path)
+            if ocr_pages:
+                days, show_name, episode = parse_movie_magic_from_ocr(ocr_pages)
+            else:
+                print("  OCR returned no pages — falling back to standard parse")
+                days, show_name, episode = parse_movie_magic(pdf)
+        elif fmt == 'ep_oneline':
             days, show_name, episode = parse_ep_oneline(pdf)
         else:
             days, show_name, episode = parse_movie_magic(pdf)

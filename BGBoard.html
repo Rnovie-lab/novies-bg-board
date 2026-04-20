@@ -225,6 +225,15 @@ tr.no-roles-row:hover td{color:#aaa!important;background:#1e2028!important}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a7fc4;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;z-index:9999;white-space:nowrap}
 .toast-show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast-error{background:#c0392b}
+/* DRAG & DROP SCENES */
+.scene-drag-handle{cursor:grab;color:#3a3d55;font-size:17px;padding:0 5px 0 2px;user-select:none;flex-shrink:0;line-height:1;transition:color 0.1s}
+.scene-drag-handle:hover{color:#5ba4e0}
+.scene-drag-handle:active{cursor:grabbing}
+.scene-block.drag-over-top{border-top:2px solid #3a90d4!important;margin-top:-2px}
+.scene-block.drag-over-bottom{border-bottom:2px solid #3a90d4!important}
+.scene-block.dragging{opacity:0.35}
+.badge-day-si{background:#0e1a14;color:#3d9e6a;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:0.3px;vertical-align:middle;margin-left:4px}
+.si-day-row-actions{display:flex;align-items:center;gap:4px}
 </style>
 </head>
 <body>
@@ -321,6 +330,7 @@ if(!state.show.contractType) state.show.contractType='tv';
 if(state.show.sagMin===undefined) state.show.sagMin=25;
 if(state.show.role===undefined) state.show.role='';
 if(state.show.isSeries===undefined) state.show.isSeries=false;
+if(state.show.showCost===undefined) state.show.showCost=true;
 
 let currentTab='breakdown';
 let expandedDays={};
@@ -361,7 +371,9 @@ function getDayStats(day){
     if(r.tier==='nonunion') nu+=n; else sag+=n;
     cost+=calcPay(r.baseRate,r.hours,r.bumps)*n;
   }));
-  const siCount=state.standins.filter(si=>!(day.standinOff||{})[si.id]).length;
+  const globalSiCount=state.standins.filter(si=>!(day.standinOff||{})[si.id]).length;
+  const daySiCount=(day.dayStandins||[]).length;
+  const siCount=globalSiCount+daySiCount;
   return {sag,nu,siCount,cost};
 }
 
@@ -423,6 +435,70 @@ function attachDayToggles(){
       const tog=document.getElementById('day-tog-'+id);
       if(body) body.classList.toggle('open',expandedDays[id]);
       if(tog)  tog.textContent=expandedDays[id]?'▼':'▶';
+    });
+  });
+  attachDragHandlers();
+}
+
+// ══════════════════════════════════════════════════════════
+// DRAG & DROP — Scene reordering within a day
+// ══════════════════════════════════════════════════════════
+let _dragSceneId=null,_dragDayId=null;
+
+function attachDragHandlers(){
+  document.querySelectorAll('.scene-block[draggable]').forEach(block=>{
+    block.addEventListener('dragstart',e=>{
+      // Don't drag if clicking a button or input inside
+      if(e.target.closest('button')||e.target.closest('input')||e.target.closest('select')) {
+        e.preventDefault(); return;
+      }
+      _dragSceneId=block.dataset.sceneId;
+      _dragDayId=block.dataset.dayId;
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',_dragSceneId);
+      setTimeout(()=>block.classList.add('dragging'),0);
+    });
+    block.addEventListener('dragend',()=>{
+      block.classList.remove('dragging');
+      document.querySelectorAll('.scene-block').forEach(b=>
+        b.classList.remove('drag-over-top','drag-over-bottom'));
+      _dragSceneId=null; _dragDayId=null;
+    });
+    block.addEventListener('dragover',e=>{
+      if(!_dragSceneId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      const rect=block.getBoundingClientRect();
+      const midY=rect.top+rect.height/2;
+      document.querySelectorAll('.scene-block').forEach(b=>
+        b.classList.remove('drag-over-top','drag-over-bottom'));
+      block.classList.add(e.clientY<midY?'drag-over-top':'drag-over-bottom');
+    });
+    block.addEventListener('dragleave',e=>{
+      if(!e.relatedTarget||!block.contains(e.relatedTarget))
+        block.classList.remove('drag-over-top','drag-over-bottom');
+    });
+    block.addEventListener('drop',e=>{
+      e.preventDefault();
+      const targetSceneId=block.dataset.sceneId;
+      const targetDayId=block.dataset.dayId;
+      block.classList.remove('drag-over-top','drag-over-bottom');
+      if(!_dragSceneId||_dragSceneId===targetSceneId) return;
+      if(_dragDayId!==targetDayId){
+        showToast('Drag scenes within the same day to reorder','error'); return;
+      }
+      const day=state.days.find(d=>d.id===_dragDayId);
+      if(!day) return;
+      const fromIdx=day.scenes.findIndex(s=>s.id===_dragSceneId);
+      let toIdx=day.scenes.findIndex(s=>s.id===targetSceneId);
+      if(fromIdx<0||toIdx<0) return;
+      const rect=block.getBoundingClientRect();
+      const dropBefore=e.clientY<(rect.top+rect.height/2);
+      const [moved]=day.scenes.splice(fromIdx,1);
+      toIdx=day.scenes.findIndex(s=>s.id===targetSceneId);
+      day.scenes.splice(dropBefore?toIdx:toIdx+1,0,moved);
+      save(); render();
+      showToast('Scene reordered');
     });
   });
 }
@@ -511,10 +587,18 @@ function renderSetup(){
       <span><span class="accent">◆</span> Stand-Ins Roster</span>
       <button class="btn btn-primary btn-sm" onclick="openStandinModal(null)">+ Add Stand-In</button>
     </div>
-    ${state.standins.length===0?`<div class="empty"><div class="empty-icon">👤</div>No stand-ins yet — add the recurring stand-ins for this production.</div>`:''}
+    ${state.standins.length===0?`<div style="font-size:12px;color:#445;padding:4px 0 8px;font-style:italic">No recurring stand-ins yet.</div>`:''}
     ${siList}
     <div class="hint" style="margin-top:8px">Stand-ins are assumed working every day. Mark them OFF in the Breakdown per day as needed.</div>
   </div>
+  <div class="card setup-card" style="margin-top:18px">
+    <div class="card-title"><span><span class="accent">◆</span> Preferences</span></div>
+    <label class="cb-row">
+      <input type="checkbox" ${s.showCost!==false?'checked':''} onchange="updateShow('showCost',this.checked)">
+      Show estimated cost in day header and totals bar
+    </label>
+  </div>
+
   <div id="usage-counter" style="text-align:center;margin-top:20px;font-size:11px;color:#3a3f5c;letter-spacing:0.08em">
     ${state._usageCount ? `sessions: ${state._usageCount}` : ''}
   </div>`;
@@ -567,10 +651,13 @@ function renderBreakdown(){
     const expanded=expandedDays[day.id];
     const warn=sagMinWarning(day,stats);
 
-    // Standins section
-    const siSection=state.standins.length>0?`
+    // Standins section — always show so "+ Day SI" is always accessible
+    const siSection=`
       <div class="si-section">
-        <div class="si-section-lbl">Stand-Ins</div>
+        <div class="si-section-lbl" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Stand-Ins</span>
+          <button class="btn btn-secondary btn-xs" onclick="openDayStandinModal('${day.id}',null)" style="font-size:10px;padding:2px 8px">+ Day SI</button>
+        </div>
         ${state.standins.map(si=>{
           const off=!!(day.standinOff||{})[si.id];
           const hrs=getSIHours(day,si);
@@ -588,7 +675,20 @@ function renderBreakdown(){
               title="Hours this day (minimum 8)">
           </div>`;
         }).join('')}
-      </div>` : '';
+        ${(day.dayStandins||[]).map(si=>`
+          <div class="si-day-row" style="grid-template-columns:160px 1fr 70px 90px 52px 26px">
+            <span class="si-day-name">${esc(si.name)}<span class="badge-day-si">DAY</span></span>
+            <span class="si-day-char">${esc(si.character||'—')}</span>
+            <span style="font-size:11px;color:#444">$${si.rate}/8</span>
+            <span class="si-working on">Working</span>
+            <input class="si-hrs-input" type="number" min="8" max="24" step="0.5"
+              value="${si.hours||12}"
+              onchange="updateDaySIHours('${day.id}','${si.id}',this.value)"
+              title="Hours this day">
+            <button class="btn btn-ghost btn-xs" style="color:#e63946;padding:1px 3px;font-size:11px" onclick="deleteDayStandin('${day.id}','${si.id}')" title="Remove">✕</button>
+          </div>`).join('')}
+        ${state.standins.length===0&&(day.dayStandins||[]).length===0?`<div style="font-size:11px;color:#4a5068;padding:4px 0;font-style:italic">No stand-ins — add from Setup roster or use + Day SI for a one-day fill-in.</div>`:''}
+      </div>`;
 
     // Scenes — column header row shown once per day (first scene with roles)
     let dayColHdrShown = false;
@@ -622,7 +722,7 @@ function renderBreakdown(){
           </tr></thead>`;
       }
 
-      return `<div class="scene-block">
+      return `<div class="scene-block" draggable="true" data-scene-id="${sc.id}" data-day-id="${day.id}">
         <table class="roles-table">
           <colgroup>
             <col class="col-edit"><col class="col-count"><col class="col-type">
@@ -630,7 +730,7 @@ function renderBreakdown(){
             <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
           </colgroup>
           <tr class="scene-hdr-row">
-            <td class="shdr-main" colspan="7"><div class="shdr-inner">${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
+            <td class="shdr-main" colspan="7"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag to reorder scene">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
             <td class="shdr-btns" colspan="2">
               <button class="btn btn-secondary btn-xs" onclick="openSceneModal('${day.id}','${sc.id}')">Edit Scene</button>
               <button class="btn btn-primary btn-xs" onclick="openRoleModal('${day.id}','${sc.id}',null)">+ Role</button>
@@ -654,7 +754,7 @@ function renderBreakdown(){
           <span class="day-stat">SI: <strong>${stats.siCount}</strong></span>
           <span class="day-stat-sag">SAG: <strong>${stats.sag}</strong></span>
           <span class="day-stat">NU: <strong>${stats.nu}</strong></span>
-          <span class="day-stat">Est: <strong>${$m(stats.cost)}</strong></span>
+          ${(state.show.showCost!==false)?`<span class="day-stat">Est: <strong>${$m(stats.cost)}</strong></span>`:''}
           <button class="btn btn-ghost btn-xs" style="color:rgba(255,255,255,0.4)" onclick="event.stopPropagation();deleteDay('${day.id}')">✕</button>
         </div>
       </div>
@@ -671,7 +771,7 @@ function renderBreakdown(){
           <div class="total-item"><span class="total-lbl">Stand-Ins</span><span class="total-val">${stats.siCount}</span></div>
           <div class="total-item"><span class="total-lbl">SAG</span><span class="total-val blue">${stats.sag}</span></div>
           <div class="total-item"><span class="total-lbl">Non-Union</span><span class="total-val purple">${stats.nu}</span></div>
-          <div class="total-item" style="margin-left:auto"><span class="total-lbl">Est. Cost</span><span class="total-val green">${$m(stats.cost)}</span></div>
+          ${(state.show.showCost!==false)?`<div class="total-item" style="margin-left:auto"><span class="total-lbl">Est. Cost</span><span class="total-val green">${$m(stats.cost)}</span></div>`:`<div style="margin-left:auto"></div>`}
           ${warn?`<span class="sag-warning">${esc(warn)}</span>`:stats.nu>0?`<span class="sag-ok">✓ SAG minimum met</span>`:''}
         </div>
       </div>
@@ -740,7 +840,7 @@ function renderExport(){
         <span>STAND-INS: <strong>${stats.siCount}</strong></span>
         <span>SAG: <strong style="color:#457b9d">${stats.sag}</strong></span>
         <span>NON UNION: <strong style="color:#9b72cf">${stats.nu}</strong></span>
-        <span style="margin-left:auto">Est: <strong style="color:#52b788">${$m(stats.cost)}</strong></span>
+        ${(state.show.showCost!==false)?`<span style="margin-left:auto">Est: <strong style="color:#52b788">${$m(stats.cost)}</strong></span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -763,7 +863,7 @@ function renderExport(){
       <div class="grand-item"><div class="glbl">Non-Union</div><div class="gval" style="color:#9b72cf">${gNU}</div></div>
       <div class="grand-item"><div class="glbl">Total BG + SI</div><div class="gval" style="color:#2a7fc4">${gSI+gSAG+gNU}</div></div>
     </div>
-    <div style="font-size:13px;color:#666">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>
+    ${(state.show.showCost!==false)?`<div style="font-size:13px;color:#666">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>`:''}
   </div>
   <div style="text-align:center;margin-top:22px" class="print-hide">
     <button class="btn btn-primary" style="font-size:15px;padding:11px 28px" onclick="window.print()">🖨 Print / Save as PDF</button>
@@ -1156,6 +1256,69 @@ function saveRole(dayId,sceneId,roleId){
   sc.roles=(sc.roles||[]).filter(r=>r.id!==role.id);
   sc.roles.push(role);
   save();closeModal();render();
+}
+
+// ══════════════════════════════════════════════════════════
+// DAY-SPECIFIC STAND-INS
+// ══════════════════════════════════════════════════════════
+function openDayStandinModal(dayId, siId){
+  const day=state.days.find(d=>d.id===dayId);if(!day)return;
+  const si=siId?(day.dayStandins||[]).find(s=>s.id===siId):null;
+  openModal(`
+    <div class="modal-title">${si?'Edit':'Add'} Day Stand-In
+      ${si?`<div style="display:flex;gap:8px">
+        <button class="btn btn-danger btn-sm" onclick="deleteDayStandin('${dayId}','${siId}');closeModal()">Remove</button>
+        <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+      </div>`:`<button class="btn btn-ghost" onclick="closeModal()">✕</button>`}
+    </div>
+    <div style="font-size:12px;color:#556;margin-bottom:14px">Day-only stand-in — appears only on this shooting day, not in the global roster.</div>
+    <div class="fg g2">
+      <div class="form-group"><label class="lbl">Name</label>
+        <input class="inp" id="dsi-name" value="${esc(si?.name||'')}" placeholder="e.g. Tommy Fill-In"></div>
+      <div class="form-group"><label class="lbl">Covers Character(s)</label>
+        <input class="inp" id="dsi-char" value="${esc(si?.character||'')}" placeholder="e.g. Amy"></div>
+    </div>
+    <div class="fg g2">
+      <div class="form-group"><label class="lbl">Rate ($/8hr)</label>
+        <input class="inp" id="dsi-rate" type="number" value="${si?.rate||214}"></div>
+      <div class="form-group"><label class="lbl">Hours This Day</label>
+        <input class="inp" id="dsi-hrs" type="number" step="0.5" min="8" value="${si?.hours||12}"></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDayStandin('${dayId}','${siId||''}')">Save</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('dsi-name')?.focus(),50);
+}
+
+function saveDayStandin(dayId,siId){
+  const name=document.getElementById('dsi-name').value.trim();
+  if(!name){alert('Name required');return;}
+  const day=state.days.find(d=>d.id===dayId);if(!day)return;
+  if(!day.dayStandins) day.dayStandins=[];
+  const si={
+    id:siId||uid(),
+    name,
+    character:document.getElementById('dsi-char').value.trim(),
+    rate:parseFloat(document.getElementById('dsi-rate').value)||214,
+    hours:Math.max(8,parseFloat(document.getElementById('dsi-hrs').value)||12)
+  };
+  day.dayStandins=day.dayStandins.filter(s=>s.id!==si.id);
+  day.dayStandins.push(si);
+  save();closeModal();render();
+}
+
+function deleteDayStandin(dayId,siId){
+  const day=state.days.find(d=>d.id===dayId);if(!day)return;
+  day.dayStandins=(day.dayStandins||[]).filter(s=>s.id!==siId);
+  save();render();
+}
+
+function updateDaySIHours(dayId,siId,val){
+  const day=state.days.find(d=>d.id===dayId);if(!day)return;
+  const si=(day.dayStandins||[]).find(s=>s.id===siId);
+  if(si) si.hours=Math.max(8,parseFloat(val)||8);
+  save();
 }
 
 // ══════════════════════════════════════════════════════════
