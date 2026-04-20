@@ -1,1 +1,3 @@
 pdfplumber
+pdf2image
+pytesseract
