@@ -823,7 +823,7 @@ function renderBreakdown(){
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
-    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet — add your first day to get started.<br><br><button class="btn-primary" style="margin-top:4px" onclick="importPdf()"><span id="pdf-import-label-2">↑ Import Schedule PDF</span></button></div>`:''}
+    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
     ${dayBlocks}`;
 }
 
