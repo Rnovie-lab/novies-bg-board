@@ -632,7 +632,7 @@ function renderSetup(){
       <input type="checkbox" ${s.showCost!==false?'checked':''} onchange="updateShow('showCost',this.checked)">
       Show estimated cost in day header and totals bar
     </label>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--br)">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--br)">
       <span style="font-size:13px;color:var(--tlbl)">Appearance</span>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark mode">${document.documentElement.dataset.theme==='light'?'☀ Light':'☾ Dark'}</button>
     </div>
