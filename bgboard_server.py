@@ -255,11 +255,10 @@ class BGBoardHandler(BaseHTTPRequestHandler):
                 tmp_path = tf.name
 
             try:
-                state = parse_shootsked_pdf(tmp_path)
+                state = self._parse_with_keepalive(tmp_path)
                 scene_count = sum(len(d['scenes']) for d in state['days'])
                 role_count  = sum(len(s['roles']) for d in state['days'] for s in d['scenes'])
                 print(f"  ✓ Parsed: {len(state['days'])} days, {scene_count} scenes, {role_count} BG roles")
-                self.send_json({'ok': True, 'state': state})
             finally:
                 os.unlink(tmp_path)
 
@@ -267,6 +266,57 @@ class BGBoardHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self.send_json({'error': str(e)}, 500)
+
+    def _parse_with_keepalive(self, tmp_path):
+        """
+        Run parse_shootsked_pdf in a thread while streaming newline keepalives
+        so Railway / browser proxies don't kill the connection on slow OCR jobs.
+        Result is sent as a single JSON object once parsing completes.
+        """
+        import threading
+
+        result_box = [None]
+        error_box  = [None]
+
+        def worker():
+            try:
+                result_box[0] = parse_shootsked_pdf(tmp_path)
+            except Exception as exc:
+                error_box[0] = exc
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+        # Send chunked headers immediately so the connection stays open
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Transfer-Encoding', 'chunked')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        # Drip a tiny keepalive chunk every 5 s while parsing runs
+        import time
+        keepalive = b'  \n'   # JSON whitespace — harmless once prepended to the real payload
+        while t.is_alive():
+            t.join(timeout=5)
+            if t.is_alive():
+                # Write a chunk: hex-length CRLF data CRLF
+                self.wfile.write(f'{len(keepalive):x}\r\n'.encode())
+                self.wfile.write(keepalive)
+                self.wfile.write(b'\r\n')
+                self.wfile.flush()
+
+        if error_box[0] is not None:
+            raise error_box[0]
+
+        body = json.dumps({'ok': True, 'state': result_box[0]}).encode()
+        self.wfile.write(f'{len(body):x}\r\n'.encode())
+        self.wfile.write(body)
+        self.wfile.write(b'\r\n')
+        # Terminating chunk
+        self.wfile.write(b'0\r\n\r\n')
+        self.wfile.flush()
+        return result_box[0]
 
     def _handle_parse_schedule(self):
         """Handle /parse-schedule endpoint for Shamel and other formats"""

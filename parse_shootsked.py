@@ -782,25 +782,45 @@ def _ocr_available():
         return False
 
 
+def _ocr_page(args):
+    """OCR a single PIL image (used with multiprocessing pool)."""
+    img, page_num = args
+    import subprocess, tempfile, os
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+        tmp = f.name
+    try:
+        img.save(tmp)
+        result = subprocess.run(
+            ['tesseract', tmp, 'stdout', '-l', 'eng', '--oem', '1', '--psm', '6'],
+            capture_output=True, text=True, timeout=60
+        )
+        return page_num, result.stdout
+    finally:
+        os.unlink(tmp)
+
+
 def _ocr_pages(pdf_path):
-    """Return list of page text strings via OCR (tesseract)."""
+    """Return list of page text strings via OCR (tesseract), parallelised."""
     from pdf2image import convert_from_path
     import subprocess, tempfile, os
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     images = convert_from_path(str(pdf_path), dpi=200)
-    texts = []
-    for img in images:
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-            tmp = f.name
-        try:
-            img.save(tmp)
-            result = subprocess.run(
-                ['tesseract', tmp, 'stdout', '-l', 'eng', '--oem', '1', '--psm', '6'],
-                capture_output=True, text=True, timeout=30
-            )
-            texts.append(result.stdout)
-        finally:
-            os.unlink(tmp)
-    return texts
+    n = len(images)
+    print(f"  OCR: {n} pages — running {'parallel' if n > 1 else 'single'} ({min(n, 4)} workers)")
+
+    # Run up to 4 pages in parallel — sweet spot for tesseract on Railway/local
+    max_workers = min(n, 4)
+    results = [None] * n
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_ocr_page, (img, i)): i for i, img in enumerate(images)}
+        for fut in as_completed(futures):
+            page_num, text = fut.result()
+            results[page_num] = text
+            print(f"  OCR: page {page_num + 1}/{n} done")
+
+    return results
 
 
 def parse_from_ocr(ocr_pages):
