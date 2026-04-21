@@ -426,7 +426,7 @@ function reuseInfo(roleType,excludeSceneId){
     day.scenes.forEach(sc=>{
       if(sc.id===excludeSceneId) return;
       (sc.roles||[]).forEach(r=>{
-        if((r.type||'').trim().toLowerCase()===q) matches.push(sc.sceneId||sc.set||'Sc');
+        if((r.type||'').trim().toLowerCase()===q) matches.push(sc.sceneId||('Day '+day.dayNumber));
       });
     });
   });
