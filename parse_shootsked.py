@@ -697,6 +697,9 @@ def assemble_schedule(rows, column_mode=False):
             # day_end markers so we must accumulate scenes from the beginning.
             # Any stray pre-day scenes in MM format are harmlessly discarded when
             # flush_day_start() clears pending_scenes.
+            # Skip scenes with no usable scene ID (e.g. OCR noise / location-only lines)
+            if not evt_data.get('scene_id', '').strip():
+                continue
             commit_scene()
             loc = evt_data.get('location', '')
             intex = evt_data.get('intex', '')

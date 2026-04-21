@@ -771,12 +771,11 @@ function renderBreakdown(){
             <td class="shdr-main" colspan="7"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag to reorder scene">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
             <td class="shdr-btns" colspan="2">
               <button class="btn btn-secondary btn-xs" onclick="openSceneModal('${day.id}','${sc.id}')">Edit Scene</button>
-              <button class="btn btn-primary btn-xs" onclick="openRoleModal('${day.id}','${sc.id}',null)">+ Role</button>
               <button class="btn btn-danger btn-xs" onclick="deleteScene('${day.id}','${sc.id}')">✕</button>
             </td>
           </tr>
           ${roles.length?`${colHdrHTML}<tbody>${roleRows}</tbody>`
-          :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No roles added — click + Role</td></tr>`}
+          :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG — click to add</td></tr>`}
         </table>
       </div>`;
     }).join('');
@@ -1934,7 +1933,7 @@ async function incrementUsage(){
 // THEME
 // ══════════════════════════════════════════════════════════
 function initTheme(){
-  const saved=localStorage.getItem('bgboard-theme')||'dark';
+  const saved=localStorage.getItem('bgboard-theme')||'light';
   document.documentElement.dataset.theme=saved==='light'?'light':'';
   updateThemeBtn();
 }
