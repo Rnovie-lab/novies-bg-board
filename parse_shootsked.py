@@ -265,6 +265,40 @@ SECTION_STRIP_RE = re.compile(
 # Strip mid-line prop numbers ("6.sleeping bag")
 MID_PROP_RE = re.compile(r'\s+\d+\.\S')
 
+# Strip trailing prop items leaked from the Props column in OCR schedules.
+# Handles: "8 ND Oracle Employees Phones" → "8 ND Oracle Employees"
+#          "10 X Overseas Oracle Oracle Badges" → "10 X Overseas Oracle"
+#          "2 SECURITY GUARDS Phones" → "2 SECURITY GUARDS"
+#
+# NOTE: do NOT use re.I here — we rely on [A-Z][a-z] being case-sensitive so
+# that mixed-case modifier words ("Oracle") are consumed but ALL-CAPS role
+# words ("GUARDS") are not.
+_PROP_NOUNS = (
+    r'[Pp]hone|[Ll]aptop|[Bb]adge|[Cc]amera|[Rr]adio|[Tt]ablet|[Mm]onitor|'
+    r'[Cc]ard|[Pp]aper|[Bb]ag|[Bb]ox|[Ff]ile|[Rr]ecorder|[Ww]atch|[Gg]lasses|'
+    r'[Ww]allet|[Kk]ey|[Pp]rop|[Ss]ign|[Nn]ote|[Bb]ook|[Pp]en|[Mm]arker|'
+    r'[Ff]older|[Bb]inder|[Hh]eadset|[Ee]arpiece|[Cc]lipboard|[Ll]anyard|'
+    r'[Cc]able|[Pp]oster|[Bb]anner|[Ff]rame|[Bb]ottle|[Gg]lass|[Cc]up|'
+    r'[Mm]ug|[Pp]late|[Bb]owl|[Tt]ray|[Bb]ackpack|[Bb]riefcase|[Pp]urse|'
+    r'[Hh]at|[Jj]acket|[Cc]oat|[Ss]hirt|[Ss]uit|[Tt]ie|[Ss]carf|ID'
+)
+OCR_TRAILING_PROPS_RE = re.compile(
+    r'\s+(?:[A-Z][a-z]\w*\'?s?\s+)?'   # optional mixed-case word (e.g. "Oracle ") — NOT all-caps
+    r'(?:' + _PROP_NOUNS + r')s?\s*$'
+)
+# "Stack of Children's books", "Stack of papers" etc.
+OCR_STACK_PROPS_RE = re.compile(r'\s+Stack\s+of\b.*$', re.I)
+
+# Reject all-caps strings that are location/directional notes or object props,
+# not BG roles. OCR sometimes picks these up from art dept notes under the BG section.
+LOCATION_NOTE_RE = re.compile(
+    r'\b(?:NORTH|SOUTH|EAST|WEST|NW|NE|SW|SE|SIDE|FLOOR|CUBICLE|HALLWAY|'
+    r'LOBBY|STAIRW?|ENTRANCE|EXIT|CORRIDOR|BUILDING|SECTION|CORNER|LEVEL|'
+    r'WING|BAY|DOCK|PLATFORM|ZONE|STAGE|DECK|AISLE|ROW|'
+    r'WINDOW|DOOR|WALL|CEILING|SCREEN|BACKDROP|PLEXIGLASS|GLASS|MIRROR|'
+    r'TABLE|CHAIR|DESK|COUCH|SOFA|SHELF|CABINET|COUNTER|PODIUM|RAILING)\b'
+)
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _clean_scene_id(raw):
@@ -348,7 +382,13 @@ def classify_row(text):
     # so that subsequent content rows are scanned for BG roles.
     # This check MUST come before skip-section prefix matching.
     for w in BG_SECTION_WORDS:
-        if re.search(r'\b' + re.escape(w) + r'\b', sl):
+        m2 = re.search(r'\b' + re.escape(w) + r'\b', sl)
+        if m2:
+            # Exclude art dept notes like "Background/ Backdrop for Eric"
+            # where the BG word is followed by "/" or "for" (not a section header)
+            after = sl[m2.end():].strip()
+            if after.startswith('/') or re.match(r'^for\b', after, re.I):
+                continue
             return ('bg_section', {})
 
     for w in SKIP_SECTION_WORDS:
@@ -378,11 +418,24 @@ def parse_bg_role(text):
     clean = SECTION_STRIP_RE.sub('', s).strip()
     clean = MID_PROP_RE.split(clean)[0].strip()
 
+    # Strip trailing prop items that OCR bleeds in from the Props column
+    # e.g. "8 ND Oracle Employees Phones" → "8 ND Oracle Employees"
+    clean = OCR_TRAILING_PROPS_RE.sub('', clean).strip()
+    clean = OCR_STACK_PROPS_RE.sub('', clean).strip()
+
+    # Strip trailing punctuation left by OCR noise
+    clean = clean.rstrip('.,;:').strip()
+
+    if not clean or len(clean) < 2:
+        return None
+
     # "12 Office Workers" / "BG crowd" / "9 softees"
     m = BG_COUNT_RE.match(clean)
     if m:
         count = int(m.group(1))
         desc  = m.group(2).strip()
+        # Strip trailing props again after extracting desc
+        desc = OCR_TRAILING_PROPS_RE.sub('', desc).strip().rstrip('.,;:').strip()
         if not desc or len(desc) < 2:
             return None
         # Reject narrative fragments that leaked from synopsis
@@ -399,10 +452,20 @@ def parse_bg_role(text):
         return (1, clean)
 
     # ALL-CAPS multi-word descriptions: "BALLOON DELIVERY PERSON", "SOFTEE WORKER"
+    # But reject location/directional notes that OCR picks up from art dept blocks
     if (BG_ALLCAPS_RE.match(clean)
             and len(clean.split()) >= 2
             and 4 < len(clean) <= 80
-            and not CAST_RE.match(clean)):
+            and not CAST_RE.match(clean)
+            and not LOCATION_NOTE_RE.search(clean)):
+        return (1, clean)
+
+    # Named BG performer — single all-caps name, e.g. "JAY", "MIKE"
+    # Appears as a standalone line under Background Actors in OCR schedules
+    _RESERVED = {'BG', 'NU', 'SAG', 'SI', 'EXT', 'INT', 'VFX', 'SFX', 'SC',
+                 'EP', 'FX', 'AD', 'PA', 'DP', 'DOP', 'UPM', 'LP', 'AM'}
+    if (re.match(r'^[A-Z]{2,15}$', clean)
+            and clean not in _RESERVED):
         return (1, clean)
 
     return None
