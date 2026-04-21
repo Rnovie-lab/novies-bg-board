@@ -823,7 +823,7 @@ function renderBreakdown(){
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
-    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet — add your first day to get started.</div>`:''}
+    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet — add your first day to get started.<br><br><button class="btn-primary" style="margin-top:4px" onclick="importPdf()"><span id="pdf-import-label-2">↑ Import Schedule PDF</span></button></div>`:''}
     ${dayBlocks}`;
 }
 
@@ -1837,12 +1837,14 @@ async function importPDF(e){
   btn.style.pointerEvents='none';
 
   try{
-    // Try new universal schedule parser first (Shamel, ProductionHub, etc.)
-    // Fall back to legacy parse-pdf endpoint if unavailable
+    // Always use the universal parser (/parse-pdf) — it handles all known
+    // schedule formats (Movie Magic, EP Scheduling, 1-Line, Shamelab, OCR).
+    // Fall back to the legacy /parse-schedule endpoint only if /parse-pdf
+    // is completely unavailable (network error / 404).
     let res, data, endpoint;
 
     try{
-      endpoint=SCHEDULE_ENDPOINT;
+      endpoint=PDF_ENDPOINT;
       res=await fetchWithTimeout(endpoint,{
         method:'POST',
         headers:{'Content-Type':'application/pdf'},
@@ -1851,8 +1853,8 @@ async function importPDF(e){
       try{ data=await res.json(); }
       catch(je){ throw new Error('Server returned non-JSON response (status '+res.status+')'); }
     }catch(e1){
-      // Fall back to legacy endpoint
-      endpoint=PDF_ENDPOINT;
+      // Fall back to legacy endpoint if universal parser not reachable
+      endpoint=SCHEDULE_ENDPOINT;
       res=await fetchWithTimeout(endpoint,{
         method:'POST',
         headers:{'Content-Type':'application/pdf'},
