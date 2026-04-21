@@ -172,8 +172,8 @@ DAY_END_PATTERNS = [
 # ── scene headers ─────────────────────────────────────────────────────────────
 
 SCENE_PATTERNS = [
-    # "Scene # 27pt,28" or "Scene # A-27" (Movie Magic)
-    (re.compile(r'^Scene\s+#?\s*([^,\s][^\n]{0,50})', re.I),
+    # "Scene # 27pt,28" or "Scene# 115" (OCR drops the space) or "Scene # A-27"
+    (re.compile(r'^Scene\s*#?\s*([^,\s#][^\n]{0,50})', re.I),
      lambda m: {'scene_id': _clean_scene_id(m.group(1)), 'intex': '', 'location': ''}),
     # "Sc. 27pt  INT  OFFICE DAY"  or  "Sc. A25 EXT PARK"  (EP / The Paper)
     (re.compile(r'^Sc\.\s+([\w,\.]+(?:pt|vo)?)\s+(INT/EXT|INT|EXT)\s+(.*)', re.I),
@@ -269,8 +269,12 @@ MID_PROP_RE = re.compile(r'\s+\d+\.\S')
 
 def _clean_scene_id(raw):
     s = raw.strip().rstrip(',').strip()
-    # Normalize merged INT/EXT: "509EXT FLAMINGO" → strip that suffix
-    s = re.sub(r'\s+(INT/EXT|INT|EXT)\s+.*$', '', s, flags=re.I).strip()
+    # Strip trailing INT/EXT + location: "509 INT FLAMINGO" → "509"
+    s = re.sub(r'\s+(INT/EXT|INT|EXT)\b.*$', '', s, flags=re.I).strip()
+    # If the entire string IS an INT/EXT location (no scene number prefix),
+    # the "Scene #" line had no actual number — return empty so it's ignored.
+    if re.match(r'^(INT/EXT|INT|EXT)\b', s, re.I):
+        return ''
     return s
 
 def _strip_tp_location(raw):
