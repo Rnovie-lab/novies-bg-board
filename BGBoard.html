@@ -637,7 +637,7 @@ function renderSetup(){
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark mode">${document.documentElement.dataset.theme==='light'?'☀ Light':'☾ Dark'}</button>
     </div>
     <div id="usage-counter" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--br);font-size:11px;color:var(--tvfnt);letter-spacing:0.08em">
-      ${state._usageCount != null ? `sessions: ${state._usageCount}` : ''}
+      ${state._usageCount != null ? `sessions: ${state._usageCount}` : 'sessions: —'}
     </div>
   </div>`;
 }
@@ -1922,9 +1922,12 @@ async function incrementUsage(){
     const res=await fetch('/usage/increment',{method:'POST'});
     const j=await res.json();
     state._usageCount=j.count;
-    // Update counter display if setup tab is visible
-    const el=document.getElementById('usage-counter');
-    if(el) el.textContent=`sessions: ${j.count}`;
+    // Re-render setup tab if it's active so counter appears immediately
+    if(currentTab==='setup') render();
+    else{
+      const el=document.getElementById('usage-counter');
+      if(el) el.textContent=`sessions: ${j.count}`;
+    }
   }catch(e){/* server not running or Railway — silent fail */}
 }
 
