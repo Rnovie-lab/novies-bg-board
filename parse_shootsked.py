@@ -108,9 +108,11 @@ BG_HEADERS = {'Background Actors', 'Background Actor', 'Background', 'Extras'}
 NON_BG_HEADERS = {
     'Cast Members', 'Cast', 'Special Equipment', 'Props', 'Set Dressing',
     'Vehicles', 'Picture Cars', 'Art Department', 'Special Effects', 'Music',
-    'Hair/Makeup', 'Wardrobe', 'Animals', 'Notes', 'Stunts',
+    'Hair/Makeup', 'Makeup/Hair', 'Wardrobe', 'Animals', 'Notes', 'Stunts',
     'Mechanical Effects', 'Sound', 'Camera', 'Electric', 'Grip',
     'Location Notes', 'Production', 'Miscellaneous', 'Additional Labor',
+    'Animal Wrangler', 'Animal Wranglers', 'Safety Bulletins', 'Visual Effects',
+    'Synopsis', 'Special Equipment', 'Intimacy Coordinator',
 }
 
 RE_DATE_LINE  = re.compile(r'^\w+\s+\d{1,2},\s+\d{4}$', re.I)   # "May 29, 2025"
@@ -172,6 +174,52 @@ def parse_bg_role_mm(line):
     # No leading count — accept only if clearly a BG descriptor (starts with "BG ")
     if RE_BG_LABEL.match(clean) and len(clean) > 4:
         return (1, clean)
+    return None
+
+
+RE_MID_PROP = re.compile(r'\s+\d+\.\S')   # mid-line prop number e.g. "... 6.sleeping"
+RE_SECTION_WORD = re.compile(
+    r'\s+(?:Wardrobe|Makeup|Art\s+Dept(?:artment)?|Set\s+Dress(?:ing)?|'
+    r'Special\s+(?:Effects|Equipment)|Animal\s+Wrangler|Sound|Camera|'
+    r'Electric|Grip|Vehicles?|Stunts?|Production|Notes?|Synopsis|Safety|'
+    r'Intimacy|Visual\s+Effects)\b',
+    re.I
+)
+
+def parse_bg_role_ocr(line):
+    """BG role parser for OCR text.
+
+    Differences from parse_bg_role_mm:
+    - Does NOT apply RE_CAST filter (BG entries look identical to cast: "N.Name")
+    - Strips merged right-column props/section text before parsing
+    """
+    line = line.strip()
+    if not line or len(line) < 2: return None
+    if RE_PAGE_NOISE.match(line): return None
+    if RE_LIKELY_NOTE.match(line): return None
+
+    # Strip anything starting from a mid-line prop number ("6.sleeping bag")
+    clean = RE_MID_PROP.split(line)[0].strip()
+    # Strip section-header words merged from adjacent column
+    clean = RE_SECTION_WORD.split(clean)[0].strip()
+
+    # Match "N. Description", "N.Description", or "N Description"
+    m = re.match(r'^(\d+)[\.\s]+(.+)$', clean)
+    if m:
+        count = int(m.group(1))
+        desc  = m.group(2).strip().lstrip('. ').rstrip(',')
+        if not desc or len(desc) < 2: return None
+        # Reject sentence fragments that leaked in from synopsis / scene description
+        if re.match(r'^(He|She|They|It|We|His|Her|Their|The\s+\w+\s+(takes|sits|walks|runs|goes|is|was))\b', desc, re.I):
+            return None
+        if len(desc) > 60 and re.search(r'\b(takes|sits|stands|walks|runs|goes|into|last|sip|drink)\b', desc, re.I):
+            return None
+        return (count, desc)
+
+    # Descriptor without number (e.g. "BG farmers", "ND PEDESTRIANS")
+    if RE_BG_LABEL.match(clean) and len(clean) > 4:
+        return (1, clean)
+
     return None
 
 
@@ -680,10 +728,19 @@ def parse_movie_magic_from_ocr(ocr_pages):
 
         # ── BG role lines ────────────────────────────────────────────────────
         if in_bg_section and current_scene is not None:
-            result = parse_bg_role_mm(line)
+            # Merged two-column lines sometimes have a section header LATER in the line
+            # (e.g. "2. Pedestrians 6.sleeping bag Set Dressing").
+            # Parse any BG role from the START of the line first, then close section.
+            non_bg_mid = re.search(
+                r'\b(?:' + '|'.join(re.escape(h) for h in NON_BG_HEADERS) + r')\b',
+                line, re.I
+            )
+            result = parse_bg_role_ocr(line)
             if result:
                 count, desc = result
                 current_scene['roles'].append(make_role(count, desc))
+            if non_bg_mid:
+                in_bg_section = False
 
     commit_scene()
     return days, show_name, episode
