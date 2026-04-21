@@ -53,23 +53,31 @@ def parse_date(text):
 
 def detect_format(pdf):
     """
-    Return 'movie_magic' or 'ep_oneline' by scanning the first 2 pages.
-    Movie Magic: has 'Shoot Day #' or 'Scene #' markers.
-    EP one-line:  has 'NNN Sc N' scene headers and an 'End of DAY N' day marker.
+    Return 'movie_magic', 'ep_oneline', or 'tp_paper' by scanning the first 8 pages.
+    movie_magic: 'Shoot Day #' / 'Scene #' + 'End Day #'
+    ep_oneline:  'NNN Sc N INT/EXT' headers + 'End of DAY N'
+    tp_paper:    'END OF DAY N--' markers + standalone 'Sc. N' scene numbers
+                 (The Paper / EP scheduling export with D{N} day headers)
     """
     sample = ''
-    for page in pdf.pages[:2]:
-        words = page.extract_words(x_tolerance=3, y_tolerance=3)
-        sample += ' '.join(w['text'] for w in words) + ' '
+    for page in pdf.pages[:min(8, len(pdf.pages))]:
+        txt = page.extract_text() or ''
+        sample += txt + '\n'
 
     if re.search(r'Shoot\s+Day\s+#', sample, re.I):
         return 'movie_magic'
-    if re.search(r'\bScene\s+#', sample, re.I) and 'End Day #' in sample:
+    if re.search(r'\bScene\s+#', sample, re.I) and re.search(r'End\s+Day\s+#', sample, re.I):
         return 'movie_magic'
     if re.search(r'\d{3}\s+Sc\s+\S+\s+(INT|EXT)', sample):
         return 'ep_oneline'
-    # Fallback: if 'End of DAY' appears it's EP format
-    if 'End of DAY' in sample:
+    # TP Paper format: END OF DAY N-- markers + standalone Sc. N scene numbers
+    if re.search(r'END\s+OF\s+DAY\s+\d+--', sample, re.I) and re.search(r'^Sc\.\s+\d', sample, re.M):
+        return 'tp_paper'
+    # Movie Magic with D{N} day headers (multi-episode / The Paper style)
+    if re.search(r'\bScene\s+#', sample, re.I) and re.search(r'^D\d+\s*[-–]', sample, re.M):
+        return 'movie_magic'
+    # EP format fallback
+    if re.search(r'End\s+of\s+DAY', sample, re.I):
         return 'ep_oneline'
     return 'movie_magic'
 
@@ -130,6 +138,7 @@ RE_LIKELY_NOTE = re.compile(
 )
 RE_CAST = re.compile(r'^\d+\.\s*[A-Z]')        # handles "4.BRUCE" and "4. BRUCE"
 RE_SLUG = re.compile(r'^(INT|EXT|INT/EXT)\s*[\./\-\s]', re.I)   # slug lines
+RE_D_DAY  = re.compile(r'^D(\d+)\s*[-–]\s*(\S.*)', re.I)  # 'D1 - Monday ...' day header
 RE_SCENE_HDR = re.compile(r'^Scene\s*#', re.I)  # "Scene # 28 gets Kelly's"
 RE_BG_COUNT_MM = re.compile(r'^(\d+)\s+(.+)$')
 
@@ -171,8 +180,13 @@ def parse_bg_role_mm(line):
     m = RE_BG_COUNT_MM.match(clean)
     if m:
         return (int(m.group(1)), m.group(2).strip())
-    # No leading count — accept only if clearly a BG descriptor (starts with "BG ")
+    # No leading count — accept "BG Xxx" labels or ALL-CAPS multi-word descriptions
     if RE_BG_LABEL.match(clean) and len(clean) > 4:
+        return (1, clean)
+    # All-caps multi-word BG labels: "BALLOON DELIVERY PERSON", "ALEXANDER SOFTEE (Nathan)"
+    if (re.match(r'^[A-Z][A-Z0-9 \-/\(\)\'\.\_]+$', clean)
+            and len(clean.split()) >= 2 and 4 < len(clean) <= 80
+            and not RE_CAST.match(clean)):
         return (1, clean)
     return None
 
@@ -309,6 +323,11 @@ def parse_movie_magic(pdf):
         m = RE_SHOOT_DAY.match(full)
         if m:
             start_day(int(m.group(1)), m.group(2))
+            continue
+        # D{N} - Weekday style day headers (multi-episode / The Paper format)
+        m_d = RE_D_DAY.match(full)
+        if m_d:
+            start_day(int(m_d.group(1)), m_d.group(2))
             continue
         if RE_END_DAY.match(full):
             commit_scene()
@@ -597,6 +616,296 @@ def parse_ep_oneline(pdf):
     return days, show_name, episode
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PARSER C — TP Paper / EP Multi-Column Schedule (e.g. The Paper ep 207)
+# ══════════════════════════════════════════════════════════════════════════════
+# Day start:  "D{N} - Weekday (crew call)"
+# Day end:    "END OF DAY {N}-- Mon, March 23, 2026-- 8 2/8 Pgs."
+# Scene:      INT/EXT LOCATION DAY D{N} {pages} pg Stage {N} ...
+#             followed by "Sc. {scene_id}" on next line
+#           OR "Sc. {scene_id} INT/EXT LOCATION ..." all on one line
+# BG column:  identified by "Background" in "Cast Background X" header rows
+#             OR standalone "Background" section header
+
+RE_TP_D_DAY   = re.compile(r'^D(\d+)\s*[-\u2013]\s*(\S.*)', re.I)
+RE_TP_DAY_END = re.compile(r'^END\s+OF\s+DAY\s+(\d+)--\s*\w+,\s*(\w+\s+\d+,\s+\d{4})', re.I)
+RE_TP_SC_INLINE = re.compile(r'^Sc\.\s+(\S+)\s+(INT/EXT|INT|EXT)\s+(.+)', re.I)
+RE_TP_SC_ALONE  = re.compile(r'^Sc\.\s+([\w,\s\.]+?)(?:\s+[A-Z])?\s*$', re.I)
+RE_TP_INTXT     = re.compile(r'^(INT/EXT|INT|EXT)\s+(.+)', re.I)
+
+TP_NON_BG = {'Cast', 'Cast DOD', 'BG Cast', 'Props', 'Wardrobe', 'Costumes',
+             'Makeup/Hair', 'Set Lighting', 'Set Dressing', 'Sound', 'Camera',
+             'Electric', 'Grip', 'VFX', 'SPFX', 'Notes', 'Misc', 'Location Notes',
+             'Practical Screen Content', 'Screen Content for Burn in', 'Video Assist'}
+
+
+def _strip_tp_location(raw):
+    """Strip page count, day/night indicator, stage and timing from an INT/EXT line."""
+    s = raw.strip()
+    # Strip DAY/NIGH[T] + D{n}/N{n} indicator + everything after
+    s = re.sub(r'\s+(?:DAY\s+)?[DN]\d+\s+.*$', '', s, flags=re.I).strip()
+    s = re.sub(r'\s+(?:DAY|NIGHT|NIGH)\s*$', '', s, flags=re.I).strip()
+    # Strip trailing page count: "1/8 pg", "3 7/8", "2 pg"
+    s = re.sub(r'\s+\d+(?:\s+\d+/\d+|/\d+)?\s*pg.*$', '', s, flags=re.I).strip()
+    s = re.sub(r'\s+Stage\s+\d+.*$', '', s, flags=re.I).strip()
+    return s
+
+
+def parse_tp_paper(pdf):
+    """Parse EP-style multi-column schedule (The Paper / similar shows)."""
+    print("  Format: TP Paper (EP multi-column schedule)")
+
+    all_rows = []
+    for i, page in enumerate(pdf.pages, 1):
+        words = page.extract_words(x_tolerance=3, y_tolerance=3)
+        rows = {}
+        for w in words:
+            y = round(float(w['top']), 0)
+            rows.setdefault(y, []).append(w)
+        page_rows = []
+        for y in sorted(rows.keys()):
+            page_rows.append(sorted(rows[y], key=lambda w: float(w['x0'])))
+        all_rows.extend(page_rows)
+        print(f"  Page {i}: {len(page_rows)} rows")
+
+    # Show/episode detection
+    show_name = ''
+    episode = ''
+    skip_re = re.compile(r'^(TP\s|The\s+Paper\s+-\s+Schedule|Printed|END\s+OF\s+DAY|D\d+\s*[-\u2013]|\.)', re.I)
+    for ws in all_rows[:15]:
+        line = ' '.join(w['text'] for w in ws)
+        if not episode:
+            ep_m = re.search(r'\bEp(?:isode)?\s+(\d{2,3})\b', line, re.I)
+            if ep_m:
+                episode = ep_m.group(1)
+        if not show_name and 4 < len(line) < 70 and not skip_re.match(line):
+            if re.search(r'[A-Za-z]{4,}', line):
+                show_name = line.strip()
+    # If show name looks like a schedule header, try to extract show title
+    if show_name and re.search(r'Schedule|White|v\d+', show_name, re.I):
+        m_show = re.search(r'(The\s+\w+(?:\s+\w+)?)', show_name, re.I)
+        if m_show:
+            show_name = m_show.group(1)
+    print(f"\n  Show: '{show_name}', Episode: '{episode}'")
+
+    days = []
+    pending_scenes = []
+    current_scene = None
+    scene_committed = False   # guard against double-appending to pending_scenes
+    current_day_num = None    # just track the day number, not a full dict
+    current_day = None        # reference to the current day dict (for finalize)
+    pending_location = ''
+    in_bg_col = False     # column-based BG extraction active
+    in_bg_sec = False     # standalone Background section active
+    bg_x_start = None
+    bg_x_end = None
+    bg_buf = []           # accumulates BG column words across rows
+
+    def flush_bg():
+        nonlocal bg_buf
+        if not bg_buf or current_scene is None:
+            bg_buf = []
+            return
+        text = ' '.join(bg_buf).strip()
+        bg_buf = []
+        m = re.match(r'^(\d+)\s+(.+)', text)
+        if m:
+            count = int(m.group(1))
+            desc = m.group(2).strip().rstrip(',')
+            # Strip merged column text: stop at known section-header words
+            desc = re.split(
+                r'\s+(?:Cast\s+DOD|Practical\s+Screen|Set\s+Light|Screen\s+Content|Costumes?|Makeup|SPFX|VFX|Props|Notes|Misc)\b',
+                desc, flags=re.I
+            )[0].strip().rstrip(',')
+            if desc and len(desc) > 1:
+                current_scene['roles'].append(make_role(count, desc))
+        else:
+            # All-caps label without number: 1 person
+            if re.match(r'^[A-Z][A-Z0-9 \-/\(\)]+$', text) and len(text.split()) >= 2:
+                current_scene['roles'].append(make_role(1, text))
+
+    def commit_scene():
+        nonlocal scene_committed
+        flush_bg()
+        if current_scene is not None and not scene_committed:
+            pending_scenes.append(current_scene)
+            scene_committed = True
+
+    for ws in all_rows:
+        texts = [w['text'] for w in ws]
+        full = ' '.join(texts)
+
+        # ── END OF DAY ────────────────────────────────────────────────────────
+        m_end = RE_TP_DAY_END.match(full)
+        if m_end:
+            commit_scene()  # flush BG and add last scene to pending_scenes
+            current_scene = None
+            scene_committed = False
+            in_bg_col = in_bg_sec = False
+            bg_x_start = bg_x_end = None
+            bg_buf = []
+            day_num = int(m_end.group(1))
+            d = {
+                'id': uid(), 'dayNumber': day_num,
+                'date': parse_date(m_end.group(2)),
+                'scenes': list(pending_scenes),
+                'standinOff': {}, 'standinHours': {}
+            }
+            pending_scenes.clear()
+            days.append(d)
+            current_day = d
+            print(f"  Day {day_num}: {parse_date(m_end.group(2)) or m_end.group(2)} — {len(d['scenes'])} scenes")
+            continue
+
+        # ── Day start header (after END OF DAY) ───────────────────────────────
+        m_dday = RE_TP_D_DAY.match(full)
+        if m_dday:
+            # Don't start a new day here — day boundaries are END OF DAY markers
+            # But if we've seen no day yet, initialise
+            if not days and current_day is None:
+                current_day = {'id': uid(), 'dayNumber': int(m_dday.group(1)),
+                               'date': '', 'scenes': [], 'standinOff': {}, 'standinHours': {}}
+                pending_scenes.clear()
+                print(f"  Day {m_dday.group(1)}: (start)")
+            continue
+
+        if current_day is None:
+            continue
+
+        # ── Scene: Sc. N INT/EXT LOCATION (inline) ───────────────────────────
+        m_sc_inline = RE_TP_SC_INLINE.match(full)
+        if m_sc_inline:
+            flush_bg()
+            commit_scene()
+            scene_id = m_sc_inline.group(1).strip().rstrip(',').strip()
+            ie = m_sc_inline.group(2).upper()
+            rest = m_sc_inline.group(3)
+            location = _strip_tp_location(ie + ' ' + rest)
+            current_scene = {'id': uid(), 'sceneId': scene_id, 'set': location, 'desc': '', 'roles': []}
+            scene_committed = False
+            in_bg_col = in_bg_sec = False
+            bg_x_start = bg_x_end = None
+            bg_buf = []
+            pending_location = ''
+            print(f"    Scene {scene_id}: {location}")
+            continue
+
+        # ── Scene: standalone Sc. N (uses pending_location) ──────────────────
+        m_sc = RE_TP_SC_ALONE.match(full)
+        if m_sc:
+            flush_bg()
+            commit_scene()
+            raw_id = m_sc.group(1).strip()
+            # Clean up: "4, 6, 8" → "4,6,8"; strip trailing T/N indicator
+            scene_id = re.sub(r'\s*,\s*', ',', raw_id).strip(',').strip()
+            scene_id = re.sub(r'^(.*\w)\s+[TN]$', r'\1', scene_id)
+            location = pending_location or 'TBD'
+            current_scene = {'id': uid(), 'sceneId': scene_id, 'set': location, 'desc': '', 'roles': []}
+            scene_committed = False
+            in_bg_col = in_bg_sec = False
+            bg_x_start = bg_x_end = None
+            bg_buf = []
+            pending_location = ''
+            print(f"    Scene {scene_id}: {location}")
+            continue
+
+        # ── INT/EXT location line (may precede the Sc. line) ─────────────────
+        m_loc = RE_TP_INTXT.match(full)
+        if m_loc:
+            pending_location = _strip_tp_location(full)
+            in_bg_col = in_bg_sec = False
+            bg_buf = []
+            continue
+
+        # ── Column header row: "Cast Background VFX" ─────────────────────────
+        if texts and texts[0] == 'Cast':
+            flush_bg()
+            if 'Background' in texts:
+                bg_word = next(w for w in ws if w['text'] == 'Background')
+                bx = float(bg_word['x0'])
+                others = [float(w['x0']) for w in ws if float(w['x0']) > bx + 10]
+                bg_x_start = bx - 5
+                bg_x_end = (min(others) - 5) if others else 9999.0
+                in_bg_col = True
+                in_bg_sec = False
+            else:
+                in_bg_col = False
+                in_bg_sec = False
+                bg_x_start = bg_x_end = None
+            continue
+
+        # ── Standalone "Background" section header ────────────────────────────
+        if texts == ['Background'] or texts == ['Background', 'Actors']:
+            flush_bg()
+            in_bg_col = False
+            in_bg_sec = True
+            bg_x_start = 0.0
+            bg_x_end = 9999.0
+            continue
+        # "Background" appearing mid-row (merged from adjacent column)
+        if 'Background' in texts and texts[0] not in ('Cast', 'Background') and not in_bg_col:
+            # Check if it looks like a standalone BG header mixed into another row
+            bg_idx = texts.index('Background')
+            if bg_idx >= len(texts) - 2:  # Background near end of row
+                flush_bg()
+                in_bg_col = False
+                in_bg_sec = True
+                bg_x_start = 0.0
+                bg_x_end = 9999.0
+                continue
+
+        # ── BG Cast section (skip — these are named cast in BG, not extras) ──
+        if full.strip() in ('BG Cast', 'BG DOD'):
+            flush_bg()
+            in_bg_col = False
+            in_bg_sec = False
+            continue
+
+        # ── Non-BG section terminators ────────────────────────────────────────
+        if texts and texts[0] in TP_NON_BG:
+            flush_bg()
+            in_bg_col = False
+            in_bg_sec = False
+            continue
+
+        # ── BG column extraction ──────────────────────────────────────────────
+        if in_bg_col and bg_x_start is not None and current_scene is not None:
+            bg_words = [w['text'] for w in ws if bg_x_start <= float(w['x0']) < bg_x_end]
+            if bg_words:
+                chunk = ' '.join(bg_words)
+                bg_buf.append(chunk)
+
+        # ── Standalone BG section extraction ─────────────────────────────────
+        elif in_bg_sec and current_scene is not None:
+            line = full.strip()
+            if not line or RE_PAGE_NOISE.match(line):
+                pass
+            elif re.match(r'^\d+\s+', line):
+                # Count + description
+                flush_bg()
+                bg_buf.append(line)
+                flush_bg()
+            elif re.match(r'^[A-Z][A-Z0-9 \-/\(\)]+$', line) and len(line.split()) >= 2:
+                # All-caps label
+                current_scene['roles'].append(make_role(1, line))
+            else:
+                in_bg_sec = False
+
+    # Finalize: collect any scenes after the last END OF DAY marker
+    commit_scene()
+    if pending_scenes:
+        # Schedule had no final END OF DAY marker — collect remaining scenes
+        d = {
+            'id': uid(), 'dayNumber': (days[-1]['dayNumber'] + 1) if days else 1,
+            'date': '', 'scenes': list(pending_scenes),
+            'standinOff': {}, 'standinHours': {}
+        }
+        pending_scenes.clear()
+        days.append(d)
+
+    return days, show_name, episode
+
 # ══════════════════════════════════════════════════════════════════════════════
 # OCR FALLBACK — for PDFs with text rendered as vector paths
 # ══════════════════════════════════════════════════════════════════════════════
@@ -780,6 +1089,8 @@ def parse_shootsked(pdf_path):
             else:
                 print("  OCR returned no pages — falling back to standard parse")
                 days, show_name, episode = parse_movie_magic(pdf)
+        elif fmt == 'tp_paper':
+            days, show_name, episode = parse_tp_paper(pdf)
         elif fmt == 'ep_oneline':
             days, show_name, episode = parse_ep_oneline(pdf)
         else:
