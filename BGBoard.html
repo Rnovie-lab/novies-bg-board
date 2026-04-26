@@ -1918,6 +1918,8 @@ function reportIssue(){
 // USAGE COUNTER
 // ══════════════════════════════════════════════════════════
 async function incrementUsage(){
+  if(sessionStorage.getItem('bg_counted')) return; // already counted this session
+  sessionStorage.setItem('bg_counted','1');
   try{
     const res=await fetch('/usage/increment',{method:'POST'});
     const j=await res.json();
