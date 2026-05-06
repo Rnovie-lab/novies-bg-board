@@ -273,7 +273,7 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 </head>
 <body>
 <div id="nav">
-  <div class="nav-brand"><img src="bgboard-logo.png" alt="Novie's BG Board" style="height:66px;display:block;border-radius:8px"></div>
+  <div class="nav-brand"><img src="bgboard-logo.png" alt="Novie's BG Board" style="height:100px;display:block;border-radius:8px"></div>
   <div class="nav-tabs">
     <button class="nav-tab" data-tab="setup">Setup</button>
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
@@ -448,6 +448,8 @@ function render(){
   document.getElementById('main').innerHTML=
     currentTab==='setup'?renderSetup():currentTab==='breakdown'?renderBreakdown():renderExport();
   attachDayToggles();
+  const footer=document.getElementById('app-footer');
+  if(footer) footer.style.display=currentTab==='setup'?'flex':'none';
 }
 
 function updateNavInfo(){
@@ -1969,50 +1971,52 @@ render();
 <!-- ── Novie's App Suite Footer ─────────────────────────────────────────── -->
 <div id="app-footer" style="
   position:fixed;bottom:0;left:0;right:0;
-  background:var(--nav);
+  background:var(--bg-nav);
   border-top:1px solid var(--br);
-  display:flex;align-items:center;justify-content:center;
-  gap:32px;padding:8px 24px;z-index:200;
+  display:none;align-items:center;justify-content:center;
+  padding:10px 0;z-index:200;
 ">
-  <!-- Gravity Snap Partners -->
-  <a href="https://www.gravitysnappartners.com" target="_blank" rel="noopener"
-     title="Gravity Snap Partners"
-     style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
-     onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
-    <img src="GS_logo_finalGS-Logo copy.png" alt="Gravity Snap Partners"
-         style="height:36px;border-radius:5px;display:block">
-    <span style="font-size:9px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Gravity Snap</span>
-  </a>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <!-- Gravity Snap Partners -->
+    <a href="https://www.gravitysnappartners.com" target="_blank" rel="noopener"
+       title="Gravity Snap Partners"
+       style="width:140px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
+       onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
+      <img src="gs-logo.png" alt="Gravity Snap Partners"
+           style="height:54px;border-radius:6px;display:block">
+      <span style="font-size:10px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Gravity Snap</span>
+    </a>
 
-  <!-- Novie's Rules -->
-  <a href="https://novies-rules-production.up.railway.app" target="_blank" rel="noopener"
-     title="Novie's Rules — Film Contract Reference"
-     style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
-     onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
-    <img src="NoviesRules_Final_logo copy.png" alt="Novie's Rules"
-         style="height:36px;border-radius:5px;display:block">
-    <span style="font-size:9px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Novie's Rules</span>
-  </a>
+    <!-- Novie's Rules -->
+    <a href="https://novies-rules-production.up.railway.app" target="_blank" rel="noopener"
+       title="Novie's Rules — Film Contract Reference"
+       style="width:140px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
+       onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
+      <img src="noviesrules-logo.png" alt="Novie's Rules"
+           style="height:54px;border-radius:6px;display:block">
+      <span style="font-size:10px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Novie's Rules</span>
+    </a>
 
-  <!-- Call Sheet Commander (2nd from right) -->
-  <a href="https://call-sheet-commander-production.up.railway.app" target="_blank" rel="noopener"
-     title="Call Sheet Commander — Coordinate Cast & Crew"
-     style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
-     onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
-    <img src="CS Commander_Final copy.png" alt="Call Sheet Commander"
-         style="height:36px;border-radius:5px;display:block">
-    <span style="font-size:9px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Call Sheet Commander</span>
-  </a>
+    <!-- Call Sheet Commander -->
+    <a href="https://call-sheet-commander-production.up.railway.app" target="_blank" rel="noopener"
+       title="Call Sheet Commander — Coordinate Cast & Crew"
+       style="width:140px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
+       onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
+      <img src="callsheet-logo.png" alt="Call Sheet Commander"
+           style="height:54px;border-radius:6px;display:block">
+      <span style="font-size:10px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Call Sheet Commander</span>
+    </a>
 
-  <!-- Revision Radar -->
-  <a href="https://revision-radar.up.railway.app" target="_blank" rel="noopener"
-     title="Revision Radar — Track Script Changes"
-     style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
-     onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
-    <img src="Radar copy.png" alt="Revision Radar"
-         style="height:36px;border-radius:5px;display:block">
-    <span style="font-size:9px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Revision Radar</span>
-  </a>
+    <!-- Revision Radar -->
+    <a href="https://revision-radar.up.railway.app" target="_blank" rel="noopener"
+       title="Revision Radar — Track Script Changes"
+       style="width:140px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;opacity:0.85;transition:opacity 0.15s"
+       onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.85">
+      <img src="radar-logo.png" alt="Revision Radar"
+           style="height:54px;border-radius:6px;display:block">
+      <span style="font-size:10px;color:var(--tmut);letter-spacing:0.04em;white-space:nowrap">Revision Radar</span>
+    </a>
+  </div>
 </div>
 <!-- ── end footer ──────────────────────────────────────────────────────── -->
 
