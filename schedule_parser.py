@@ -28,10 +28,34 @@ class ParsedScene:
     time_of_day: str = ""
     shooting_day: Optional[int] = None
     background_actors: List[Dict] = None
+    # Non-BG columns captured by ColumnAwareScheduleParser; not surfaced in UI yet.
+    cast: List[Dict] = None
+    props: List[str] = None
+    vehicles: List[str] = None
+    wardrobe: List[str] = None
+    animals: List[str] = None
+    set_dressing: List[str] = None
+    additional_labor: List[str] = None
+    visual_effects: List[str] = None
+    stunts: List[str] = None
+    weapons: List[str] = None
+    special_equipment: List[str] = None
+    notes_section: List[str] = None
+    camera: List[str] = None
+    makeup: List[str] = None
+    art_department: List[str] = None
+    misc: List[str] = None
+    grip: List[str] = None
 
     def __post_init__(self):
-        if self.background_actors is None:
-            self.background_actors = []
+        for attr in (
+            'background_actors', 'cast', 'props', 'vehicles', 'wardrobe',
+            'animals', 'set_dressing', 'additional_labor', 'visual_effects',
+            'stunts', 'weapons', 'special_equipment', 'notes_section',
+            'camera', 'makeup', 'art_department', 'misc', 'grip',
+        ):
+            if getattr(self, attr) is None:
+                setattr(self, attr, [])
 
 
 class HeuristicScheduleParser:
@@ -158,7 +182,7 @@ class HeuristicScheduleParser:
                 current_day = int(day_num)
 
             # --- Format A: Shamel "INT. Scene X" or "EXT. Scene X" ---
-            shamel_match = re.match(r'^\s*(INT|EXT|INT/EXT|I/E)\.\s+Scene\s+(\d+[A-Za-z]?)', line)
+            shamel_match = re.match(r'^\s*(INT|EXT|INT/EXT|I/E)\.\s+Scene\s+(\d+[A-Za-z]*)', line)
             if shamel_match:
                 int_ext = shamel_match.group(1)
                 scene_id = shamel_match.group(2)
@@ -185,7 +209,7 @@ class HeuristicScheduleParser:
 
                 if i + 1 < len(self.lines):
                     next_line = self.lines[i + 1]
-                    scene_num_match = re.match(r'^\s*Scene\s*#\s*(\d+[A-Za-z]?)\s*,?\s*(.+)?', next_line, re.IGNORECASE)
+                    scene_num_match = re.match(r'^\s*Scene\s*#\s*(\d+[A-Za-z]*)\s*,?\s*(.+)?', next_line, re.IGNORECASE)
                     if scene_num_match:
                         scene_id = scene_num_match.group(1)
                         synopsis = (scene_num_match.group(2) or "").strip()
@@ -405,14 +429,603 @@ class HeuristicScheduleParser:
         return "Unknown Production"
 
 
+class ColumnAwareScheduleParser:
+    """
+    Layout-aware parser. Uses pdfplumber's word-coordinate output to detect
+    column header rows, derive column anchors by x-position, and route content
+    words to the correct column. Handles four format families seen so far:
+    Shamel, Movie Magic (multi-col), Movie Magic (simple), and Hierarchical.
+
+    Falls through to HeuristicScheduleParser if a page has no recognized
+    column headers at all.
+
+    See PARSER_COORDINATION.md for the full design rationale.
+    """
+
+    # Canonical key -> aliases (case-insensitive match). Order matters within
+    # an alias list: multi-word aliases must come first so they win greedy match.
+    LABEL_VOCAB = {
+        'cast': ['Cast Members', 'Cast'],
+        'background_actors': ['Background Actors', 'Background', 'Extras', 'BG'],
+        'props': ['Props'],
+        'wardrobe': ['Wardrobe', 'Costumes'],
+        'vehicles': ['Vehicles', 'Picture Cars'],
+        'animals': ['Animals'],
+        'set_dressing': ['Set Dressing', 'Greens'],
+        'additional_labor': ['Additional Labor', "Add'l Labor"],
+        'visual_effects': ['Visual Effects', 'VFX', 'SPFX'],
+        'stunts': ['Stunts'],
+        'weapons': ['Weapons'],
+        'special_equipment': ['Special Equipment'],
+        'notes_section': ['Notes'],
+        'camera': ['Camera'],
+        'makeup': ['Make Up', 'Makeup'],
+        'art_department': ['Art Department'],
+        'misc': ['Miscellaneous'],
+        'grip': ['Grip'],
+    }
+    # Tokens that appear inside header rows as structural noise — not labels
+    # themselves, but should not disqualify the row from being a header.
+    # - Column-structure markers: '#', 'name', 'members'
+    # - Scene-header keywords that share the y-row with column headers in
+    #   formats like ProductionHub (Block2 #2): 'INT NURSE STATION Day Cast
+    #   Members Props' is all on one visual row.
+    # - Lower-cased before comparison; punctuation trimmed.
+    HEADER_NOISE_TOKENS = {
+        '#', 'name', 'members',
+        'int', 'ext', 'int/ext', 'i/e',
+        'day', 'night', 'dawn', 'dusk', 'morning', 'afternoon', 'evening',
+        'stage', 'pgs', 'pg', 'page', 'pages',
+    }
+    # When a single-label sub-section column is active (no multi-column system),
+    # content this many points to the right of the label's x1 is considered
+    # outside the column and dropped. Prevents far-right content from being
+    # vacuumed into the active column.
+    SUBSECTION_RIGHT_MARGIN = 200.0
+    # Labels that are NOT background performers but live in the same layout —
+    # we still recognize them so words in those columns don't bleed into BG.
+    # Non-BG list: everything in LABEL_VOCAB except 'background_actors'.
+
+    # Y-tolerance for grouping words into a line (points). Must be tight
+    # enough that distinct visual rows separated by ~3pt (some Movie Magic
+    # layouts) stay separate, but loose enough to handle subpixel y variance
+    # within a single row.
+    Y_TOL = 1.5
+    # If the gap between content rows under an active column system exceeds this
+    # (points), the column system is considered closed — protects against
+    # footers and unrelated content at the bottom of the page being routed into
+    # the last live column system.
+    SECTION_BREAK_GAP = 30.0
+
+    def __init__(self, pdf_path: str):
+        self.pdf_path = pdf_path
+        self.warnings: List[str] = []
+        self.format_family = 'unknown'
+        # Build lowercase alias -> (canonical, word_count) lookup.
+        self._alias_lookup = {}
+        for canon, aliases in self.LABEL_VOCAB.items():
+            for a in aliases:
+                self._alias_lookup[a.lower()] = (canon, len(a.split()))
+        # Track whether ANY page used column-aware extraction successfully.
+        self._any_columns_found = False
+
+    # ------------------------------------------------------------------ parse
+
+    def parse(self) -> Dict:
+        scenes: List[ParsedScene] = []
+        # Map (page_idx, line_top) -> shooting day, derived from 'End of Day N' /
+        # 'Shoot Day # N' markers. We carry these into per-scene shooting_day.
+        day_markers: List[tuple] = []  # [(page_idx, top, day_num), ...]
+        with pdfplumber.open(self.pdf_path) as pdf:
+            # Format-family detection from footer text on first few pages.
+            self.format_family = self._detect_format_family(pdf)
+            show_title = self._extract_show_title(pdf)
+
+            current_day = 1
+            for page_idx, page in enumerate(pdf.pages):
+                # Sniff "Shoot Day # N" header before parsing the page's scenes —
+                # it sets the current day for ALL scenes on this page.
+                page_text = page.extract_text() or ''
+                shoot_day_match = re.search(r'Shoot\s+Day\s+#?\s*(\d+)', page_text, flags=re.IGNORECASE)
+                if shoot_day_match:
+                    current_day = int(shoot_day_match.group(1))
+
+                page_scenes = self._parse_page(page, page_idx)
+                for s in page_scenes:
+                    if s.shooting_day is None:
+                        s.shooting_day = current_day
+                scenes.extend(page_scenes)
+
+                # "End of Day N" advances current_day for subsequent pages.
+                end_of_day_match = re.search(r'End\s+of\s+Day\s+(\d+)', page_text, flags=re.IGNORECASE)
+                if end_of_day_match:
+                    current_day = int(end_of_day_match.group(1)) + 1
+
+        return {
+            'scenes': [asdict(s) for s in scenes],
+            'metadata': {
+                'show_title': show_title,
+                'format': f'column-aware:{self.format_family}',
+                'total_scenes': len(scenes),
+                'columns_detected': self._any_columns_found,
+                'warnings': self.warnings,
+            },
+        }
+
+    # ------------------------------------------------------------- per-page
+
+    def _parse_page(self, page, page_idx: int) -> List[ParsedScene]:
+        words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+        if not words:
+            return []
+        lines = self._group_lines(words)
+        if not lines:
+            return []
+
+        # Find scene markers on this page; each marker starts a scene block.
+        scene_markers = self._find_scene_markers(lines)
+        if not scene_markers:
+            return []  # Title page or unrelated; skip silently.
+
+        scenes: List[ParsedScene] = []
+        for i, marker in enumerate(scene_markers):
+            block_start = marker['line_idx']
+            block_end = scene_markers[i + 1]['line_idx'] if i + 1 < len(scene_markers) else len(lines)
+            block_lines = lines[block_start:block_end]
+            scene = self._parse_scene_block(block_lines, marker)
+            if scene is not None:
+                scenes.append(scene)
+        return scenes
+
+    def _parse_scene_block(self, block_lines: List[Dict], marker: Dict) -> Optional[ParsedScene]:
+        """Walk a scene block; maintain an 'active columns' state; route content."""
+        scene = ParsedScene(
+            scene_id=marker['scene_id'],
+            int_ext=marker.get('int_ext', 'INT'),
+        )
+
+        # Extract metadata (set, synopsis, time of day) from the scene's header area —
+        # the lines before the first column-header row.
+        active_columns: List[Dict] = []
+        # Per-column accumulator of (line_top, [phrase_strings]) so we keep row order.
+        column_rows: Dict[str, List[List[str]]] = {}
+        last_content_top: Optional[float] = None
+
+        def reset_columns(cols):
+            active_columns.clear()
+            active_columns.extend(cols)
+            for c in cols:
+                column_rows.setdefault(c['canon'], [])
+
+        metadata_text_lines: List[str] = []
+
+        for line in block_lines:
+            labels = self._find_labels_in_line(line)
+            if self._is_column_header_row(labels, line):
+                # Establish a new column system. Earlier columns flush; new ones start.
+                reset_columns(labels)
+                last_content_top = line['top']
+                self._any_columns_found = True
+                continue
+            if len(labels) == 1 and self._is_sub_section_header(labels[0], line):
+                # Single-label line at left → sub-section header (Margo pattern).
+                # Treat it as a 1-column system spanning the whole line width.
+                reset_columns([{
+                    'x0': 0.0,
+                    'x1': labels[0]['x1'],
+                    'canon': labels[0]['canon'],
+                    'text': labels[0]['text'],
+                }])
+                last_content_top = line['top']
+                continue
+
+            # Margo pattern: leftmost-column label appears on a row that also has
+            # content in OTHER columns. The label re-canonicalizes the leftmost
+            # column for subsequent rows; this row's other-column content is
+            # still routed normally.
+            if len(labels) == 1 and active_columns:
+                label = labels[0]
+                leftmost = min(active_columns, key=lambda c: c['x0'])
+                if abs(label['x0'] - leftmost['x0']) <= 20:
+                    leftmost['canon'] = label['canon']
+                    column_rows.setdefault(label['canon'], [])
+                    # Remove the label's own words from the line before routing,
+                    # so 'Background' itself doesn't become a BG entry.
+                    label_word_xs = {w['x0'] for w in line['words'][:label['word_span']]}
+                    line = {
+                        **line,
+                        'words': [w for w in line['words'] if w['x0'] not in label_word_xs],
+                    }
+                    if not line['words']:
+                        last_content_top = line['top'] if 'top' in line else last_content_top
+                        continue
+
+            if not active_columns:
+                # Pre-header lines are scene metadata.
+                metadata_text_lines.append(line['text'])
+                continue
+
+            # Section-break detection: if there's a large vertical gap since the
+            # last content row, the column system is stale (footer / next-scene).
+            if last_content_top is not None and (line['top'] - last_content_top) > self.SECTION_BREAK_GAP:
+                active_columns.clear()
+                metadata_text_lines.append(line['text'])
+                continue
+
+            # Route this content line to columns.
+            routed = self._route_line_to_columns(line, active_columns)
+            row_has_content = False
+            for canon, words_in_col in routed.items():
+                if not words_in_col:
+                    continue
+                phrase = ' '.join(w['text'] for w in words_in_col).strip()
+                if phrase:
+                    column_rows.setdefault(canon, []).append([phrase, line['top']])
+                    row_has_content = True
+            if row_has_content:
+                last_content_top = line['top']
+
+        # Populate scene fields from column_rows.
+        self._fill_scene_from_columns(scene, column_rows)
+        # Scene metadata from pre-header text.
+        self._fill_scene_metadata(scene, metadata_text_lines, marker)
+        return scene
+
+    # ----------------------------------------------------- line/label helpers
+
+    def _group_lines(self, words: List[Dict]) -> List[Dict]:
+        """Group words into lines by y-position. Returns lines sorted top-to-bottom."""
+        words_sorted = sorted(words, key=lambda w: (w['top'], w['x0']))
+        lines: List[Dict] = []
+        for w in words_sorted:
+            if lines and abs(w['top'] - lines[-1]['_anchor_top']) <= self.Y_TOL:
+                lines[-1]['words'].append(w)
+            else:
+                lines.append({'_anchor_top': w['top'], 'top': w['top'], 'words': [w]})
+        for line in lines:
+            line['words'].sort(key=lambda w: w['x0'])
+            line['text'] = ' '.join(w['text'] for w in line['words'])
+            del line['_anchor_top']
+        return lines
+
+    def _find_labels_in_line(self, line: Dict) -> List[Dict]:
+        """Return label matches in a line: [{x0, x1, canon, text}, ...]"""
+        words = line['words']
+        matches: List[Dict] = []
+        i = 0
+        while i < len(words):
+            matched = None
+            # Try longest aliases first (greedy multi-word match).
+            for window in (3, 2, 1):
+                if i + window > len(words):
+                    continue
+                phrase = ' '.join(w['text'] for w in words[i:i + window])
+                lookup = self._alias_lookup.get(phrase.lower())
+                if lookup:
+                    canon, _ = lookup
+                    matched = {
+                        'x0': words[i]['x0'],
+                        'x1': words[i + window - 1]['x1'],
+                        'canon': canon,
+                        'text': phrase,
+                        'word_span': window,
+                    }
+                    break
+            if matched:
+                matches.append(matched)
+                i += matched['word_span']
+            else:
+                i += 1
+        return matches
+
+    def _is_column_header_row(self, labels: List[Dict], line: Dict) -> bool:
+        """A real column-header row requires:
+          - 2+ distinct labels at 2+ distinct x-positions
+          - Labels span ≥50pt horizontally (rejects content lines where label
+            words happen to appear close together, like 'Beach BG props')
+          - Non-label words on the line are either zero OR all are recognized
+            header-noise tokens like '#', 'Name' (handles 'Cast # Name Extras
+            Miscellaneous' Movie Magic variants).
+        """
+        if len(labels) < 2:
+            return False
+        canons = {l['canon'] for l in labels}
+        xs = sorted({round(l['x0'], 1) for l in labels})
+        if len(canons) < 2 or len(xs) < 2:
+            return False
+        if (xs[-1] - xs[0]) < 50.0:
+            return False
+        # All non-label words must be header-noise.
+        words_in_labels = sum(l['word_span'] for l in labels)
+        non_label_count = len(line['words']) - words_in_labels
+        if non_label_count == 0:
+            return True
+        # Identify non-label words by their text. Approximate: any word whose
+        # lowercased text is in HEADER_NOISE_TOKENS counts as noise.
+        noise_count = sum(
+            1 for w in line['words']
+            if w['text'].lower().rstrip('.,:') in self.HEADER_NOISE_TOKENS
+        )
+        # Subtract label words from noise_count if a label happens to contain
+        # a noise token (rare — none of our labels do today, but be safe).
+        return noise_count >= non_label_count
+
+    def _is_sub_section_header(self, label: Dict, line: Dict) -> bool:
+        """
+        A line containing exactly the label and nothing else (or a multi-word
+        label spanning the whole line). Catches Margo's 'Background',
+        'Costumes', 'Make Up' sub-headers. Rejects 'BG surfboards' style
+        content lines that happen to start with a label word.
+        """
+        return label['word_span'] == len(line['words'])
+
+    def _route_line_to_columns(self, line: Dict, columns: List[Dict]) -> Dict[str, List[Dict]]:
+        """Partition a content line's words by which column range they fall in.
+
+        Inter-column boundary = midpoint between the PREVIOUS label's right edge (x1)
+        and the CURRENT label's left edge (x0). This places the boundary inside
+        the visible whitespace gap between columns, so content can extend in
+        either direction past its column header without crossing into the
+        neighbor's territory.
+        """
+        if not columns:
+            return {}
+        sorted_cols = sorted(columns, key=lambda c: c['x0'])
+        ranges = []
+        for i, col in enumerate(sorted_cols):
+            if i == 0:
+                x_min = 0.0  # Leftmost column captures everything to the left.
+            else:
+                prev = sorted_cols[i - 1]
+                x_min = (prev['x1'] + col['x0']) / 2.0
+            if i + 1 < len(sorted_cols):
+                nxt = sorted_cols[i + 1]
+                x_max = (col['x1'] + nxt['x0']) / 2.0
+            elif len(sorted_cols) == 1:
+                # Single-column sub-section: cap right edge so far-right content
+                # (other unlabeled columns) doesn't get vacuumed into this one.
+                x_max = col['x1'] + self.SUBSECTION_RIGHT_MARGIN
+            else:
+                x_max = float('inf')
+            ranges.append((x_min, x_max, col['canon']))
+
+        result: Dict[str, List[Dict]] = {canon: [] for _, _, canon in ranges}
+        for w in line['words']:
+            for x_min, x_max, canon in ranges:
+                if x_min <= w['x0'] < x_max:
+                    result[canon].append(w)
+                    break
+        return result
+
+    # -------------------------------------------------------- scene assembly
+
+    def _fill_scene_from_columns(self, scene: ParsedScene, column_rows: Dict[str, List]):
+        """Convert per-column row strings into typed scene fields."""
+        # Cast: parse "N NAME" or "N. NAME" → {number, name}
+        for entry, _top in column_rows.get('cast', []):
+            cast_member = self._parse_cast_entry(entry)
+            if cast_member:
+                scene.cast.append(cast_member)
+
+        # BG: parse "xN TYPE" / "N TYPE" / "TYPE" → {count, type, notes, props}
+        for entry, _top in column_rows.get('background_actors', []):
+            bg = self._parse_bg_entry(entry)
+            if bg:
+                scene.background_actors.append(bg)
+
+        # All other columns: flat string list, one entry per row.
+        flat_field_map = {
+            'props': 'props',
+            'vehicles': 'vehicles',
+            'wardrobe': 'wardrobe',
+            'animals': 'animals',
+            'set_dressing': 'set_dressing',
+            'additional_labor': 'additional_labor',
+            'visual_effects': 'visual_effects',
+            'stunts': 'stunts',
+            'weapons': 'weapons',
+            'special_equipment': 'special_equipment',
+            'notes_section': 'notes_section',
+            'camera': 'camera',
+            'makeup': 'makeup',
+            'art_department': 'art_department',
+        }
+        for canon, field in flat_field_map.items():
+            for entry, _top in column_rows.get(canon, []):
+                cleaned = entry.strip()
+                if cleaned:
+                    getattr(scene, field).append(cleaned)
+
+    def _parse_cast_entry(self, entry: str) -> Optional[Dict]:
+        """Parse '1 OPTERS' / '23.KELLY' / '500(K).5.BODHI (5)' → {number, name}."""
+        s = entry.strip()
+        # Common shapes: "N. NAME", "N NAME", "N.NAME"
+        m = re.match(r'^(\d+)\s*\.?\s*([A-Z][A-Z0-9 \-\'\.\(\)/]+?)(?:\s+\(\d+\))?\s*$', s)
+        if m:
+            try:
+                return {'number': int(m.group(1)), 'name': m.group(2).strip()}
+            except ValueError:
+                pass
+        # Fallback: just store the raw string under name with number=None.
+        return {'number': None, 'name': s}
+
+    def _parse_bg_entry(self, entry: str) -> Optional[Dict]:
+        """Parse 'x2 Bikini Girls (20 Y.O.)' / '10 PARTY GUESTS' / '30 YEAR OLD MOM' / 'Fisherman'."""
+        s = entry.strip()
+        if not s:
+            return None
+        # Leading xN badge (definitely a count).
+        m = re.match(r'^x\s*(\d+)\s+(.+)$', s, flags=re.IGNORECASE)
+        if m:
+            return {'count': int(m.group(1)), 'type': m.group(2).strip(), 'notes': '', 'props': []}
+        # Leading bare integer: count only if not followed by an age/year word.
+        m = re.match(r'^(\d+)\s+(.+)$', s)
+        if m:
+            rest = m.group(2).strip()
+            first_word = rest.split()[0].upper().rstrip('.,')
+            if first_word in {'YEAR', 'YEARS', 'YR', 'YRS', 'Y.O.', 'Y/O', 'YO'}:
+                # "30 YEAR OLD MOM" — number is part of description.
+                return {'count': 1, 'type': s, 'notes': '', 'props': []}
+            return {'count': int(m.group(1)), 'type': rest, 'notes': '', 'props': []}
+        # No leading count → implicit 1.
+        return {'count': 1, 'type': s, 'notes': '', 'props': []}
+
+    # ---------------------------------------------- scene / format detection
+
+    def _find_scene_markers(self, lines: List[Dict]) -> List[Dict]:
+        """Find lines that mark a scene start.
+
+        Patterns seen across formats:
+          - 'Scene N' or 'Scene # N' (Shamel standalone; Margo inline)
+          - 'Sc. N' or 'Sc N' (Movie Magic abbreviation)
+          - 'INT/EXT LOCATION Stage N' header line (Movie Magic; comes BEFORE
+            the 'Sc. N' line, so we prefer this when both exist for the same scene
+            to get accurate block boundaries)
+        """
+        markers: List[Dict] = []
+
+        def add_marker(line_idx: int, scene_id: str, int_ext: str):
+            # Dedupe: if two patterns matched within 4 lines of each other,
+            # they're the same scene — keep the EARLIER line (so the block
+            # starts at the true beginning).
+            for m in markers:
+                if m['scene_id'] == scene_id and abs(m['line_idx'] - line_idx) <= 4:
+                    if line_idx < m['line_idx']:
+                        m['line_idx'] = line_idx
+                        m['int_ext'] = int_ext
+                    return
+            markers.append({'line_idx': line_idx, 'scene_id': scene_id, 'int_ext': int_ext})
+
+        for i, line in enumerate(lines):
+            text = line['text']
+
+            # Pattern A: 'Scene N' or 'Scene # N'
+            m = re.search(r'\bScene\s*#?\s*(\d+[A-Za-z]*)\b', text)
+            if m:
+                scene_word_pos = text.lower().find('scene')
+                if len(text[:scene_word_pos].split()) <= 3:
+                    int_ext = self._find_int_ext_in_nearby_lines(lines, i)
+                    add_marker(i, m.group(1), int_ext)
+
+            # Pattern B: 'Sc. N' or 'Sc N' (Movie Magic) — used as the
+            # tagline beneath an INT/EXT header.
+            m = re.search(r'\bSc\.?\s*(\d+[A-Za-z]*)\b', text)
+            if m and 'scene' not in text.lower():
+                sc_pos = text.lower().find('sc')
+                if len(text[:sc_pos].split()) <= 2:
+                    int_ext = self._find_int_ext_in_nearby_lines(lines, i)
+                    add_marker(i, m.group(1), int_ext)
+
+            # Pattern C: 'INT/EXT LOCATION ... Stage N' header line. We register
+            # this so the block starts at the right place even when a 'Scene #'
+            # marker also exists below. Scene ID is not yet known here — we
+            # only register if there's an immediately-following 'Sc. N' or
+            # 'Scene #' that we can map to.
+            int_ext_match = re.match(r'^\s*(INT/EXT|INT\.?|EXT\.?|I/E)\s+[A-Z]', text)
+            if int_ext_match and re.search(r'\b(Stage|stage)\s+\d', text):
+                # Look ahead up to 3 lines for the scene number.
+                for j in range(i, min(i + 4, len(lines))):
+                    look = lines[j]['text']
+                    sm = re.search(r'\bScene\s*#?\s*(\d+[A-Za-z]*)\b', look) or \
+                         re.search(r'\bSc\.?\s*(\d+[A-Za-z]*)\b', look)
+                    if sm:
+                        add_marker(i, sm.group(1), int_ext_match.group(1).rstrip('.'))
+                        break
+
+        markers.sort(key=lambda m: m['line_idx'])
+        return markers
+
+    def _find_int_ext_in_nearby_lines(self, lines: List[Dict], scene_line_idx: int) -> str:
+        """Look in the scene's line and the previous 2 lines for INT/EXT."""
+        for j in range(max(0, scene_line_idx - 2), min(len(lines), scene_line_idx + 2)):
+            m = re.search(r'\b(INT/EXT|INT\.?|EXT\.?|I/E)\b', lines[j]['text'])
+            if m:
+                return m.group(1).rstrip('.')
+        return 'INT'
+
+    def _fill_scene_metadata(self, scene: ParsedScene, metadata_lines: List[str], marker: Dict):
+        joined = '\n'.join(metadata_lines)
+        # Set: SET NAME ...
+        m = re.search(r'Set:\s*(.+?)(?=\s+Time\s+of\s+Day:|\s+Duration:|\s+Script\s+Pages?:|\n|$)',
+                      joined, flags=re.IGNORECASE)
+        if m:
+            scene.set = m.group(1).strip()
+        # Synopsis
+        m = re.search(r'Synopsis:\s*(.+?)(?=\s+Unit:|\s+Script\s+Pages?:|\n|$)',
+                      joined, flags=re.IGNORECASE)
+        if m:
+            scene.synopsis = m.group(1).strip()
+        # Time of Day
+        m = re.search(r'Time\s+of\s+Day:\s*(.+?)(?=\s+Duration:|\s+Unit:|\n|$)',
+                      joined, flags=re.IGNORECASE)
+        if m:
+            scene.time_of_day = m.group(1).strip()
+
+    def _detect_format_family(self, pdf) -> str:
+        """Quick sniff of vendor signature from first 2 pages of text."""
+        try:
+            text = ''
+            for p in pdf.pages[:2]:
+                text += (p.extract_text() or '') + '\n'
+        except Exception:
+            return 'unknown'
+        t = text.lower()
+        if 'shamelstudio.com' in t:
+            return 'shamel'
+        if 'movie magic' in t or 'mm scheduling' in t:
+            return 'movie_magic'
+        # Best-effort fallback.
+        return 'unknown'
+
+    def _extract_show_title(self, pdf) -> str:
+        """Take the largest-font centered title text from page 1 if possible."""
+        try:
+            page = pdf.pages[0]
+            text = page.extract_text() or ''
+        except Exception:
+            return 'Unknown Production'
+        # First non-empty line that isn't a section label or date.
+        for line in text.split('\n'):
+            s = line.strip()
+            if not s:
+                continue
+            if re.match(r'^\d', s):
+                continue
+            if any(k in s.lower() for k in ('schedule', 'shooting', 'board:', 'page')):
+                # The combined "Show Name - SHOOTING SCHEDULE" line is fine; strip suffix.
+                return re.split(r'\s+-\s+', s, maxsplit=1)[0].strip()
+            return s
+        return 'Unknown Production'
+
+
 def parse_shooting_schedule(pdf_path: str, format_type: str = "auto") -> Dict:
     """
-    Parse any shooting schedule PDF format using heuristic pattern matching.
+    Parse any shooting schedule PDF format.
 
-    This universal parser works with ANY format - Shamel, ProductionHub, Movie Magic,
-    StudioBinder, Cineapse, standard one-line schedules, and unknown variations.
+    Primary path: ColumnAwareScheduleParser — uses word coordinates and column
+    detection. Fallback: HeuristicScheduleParser — text-based, used only when
+    the primary path finds no recognizable column headers anywhere in the PDF.
 
     Returns standardized schedule data ready for BG Board conversion.
     """
-    parser = HeuristicScheduleParser(pdf_path)
-    return parser.parse()
+    # Primary path: column-aware.
+    column_parser = ColumnAwareScheduleParser(pdf_path)
+    column_result = column_parser.parse()
+
+    # Fall through to heuristic ONLY if column-aware found nothing useful:
+    # no column headers AND no scenes. If it found scenes but no columns, its
+    # output (scenes with empty BG/cast lists) is still better than the
+    # heuristic's text-based pattern matching for novel formats.
+    needs_fallback = (
+        not column_result['metadata'].get('columns_detected')
+        and len(column_result['scenes']) == 0
+    )
+    if needs_fallback:
+        heuristic = HeuristicScheduleParser(pdf_path)
+        heuristic_result = heuristic.parse()
+        heuristic_result['metadata']['format'] = (
+            f"heuristic-fallback ({heuristic_result['metadata'].get('format', 'auto-detected')})"
+        )
+        return heuristic_result
+
+    return column_result
