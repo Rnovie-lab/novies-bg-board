@@ -459,7 +459,7 @@ class ColumnAwareScheduleParser:
         'special_equipment': ['Special Equipment'],
         'notes_section': ['Notes'],
         'camera': ['Camera'],
-        'makeup': ['Make Up', 'Makeup'],
+        'makeup': ['Make Up', 'Makeup', 'Hair', 'Makeup & Hair', 'Make Up & Hair'],
         'art_department': ['Art Department'],
         'misc': ['Miscellaneous'],
         'grip': ['Grip'],
@@ -867,8 +867,39 @@ class ColumnAwareScheduleParser:
                 # "30 YEAR OLD MOM" — number is part of description.
                 return {'count': 1, 'type': s, 'notes': '', 'props': []}
             return {'count': int(m.group(1)), 'type': rest, 'notes': '', 'props': []}
-        # No leading count → implicit 1.
+        # No leading count → only accept if the string looks like a real BG role,
+        # not column bleed from adjacent sections (e.g. "Hair" from a "Makeup & Hair"
+        # column header, or "dust" from "covered in wood dust" in the makeup column).
+        if self._looks_like_column_bleed(s):
+            return None
         return {'count': 1, 'type': s, 'notes': '', 'props': []}
+
+    def _looks_like_column_bleed(self, s: str) -> bool:
+        """Reject single-token / non-BG-shaped strings that are almost certainly
+        leakage from adjacent columns (makeup, notes, wardrobe, etc.)."""
+        tokens = s.split()
+        # Purely symbolic ("&", "+", "/")
+        if not re.search(r'[A-Za-z]', s):
+            return True
+        # Single token: reject if it matches a known non-BG section label,
+        # or is a single lowercase word (descriptive note fragment).
+        if len(tokens) == 1:
+            tok = tokens[0]
+            if tok.lower() in self._alias_lookup and self._alias_lookup[tok.lower()][0] != 'background_actors':
+                return True
+            # "dust", "covered", "wood" — single lowercase tokens are not BG roles.
+            if tok.islower() and not tok.startswith('('):
+                return True
+            # Single 1-2 letter token: not a BG role.
+            if len(tok) < 3:
+                return True
+        # Multi-token: reject if the WHOLE string matches a non-BG label alias
+        # (e.g. "Make Up", "Picture Cars"). Word-by-word match against the vocab.
+        s_lower = s.lower().strip()
+        for alias_lower, (canon, _) in self._alias_lookup.items():
+            if canon != 'background_actors' and alias_lower == s_lower:
+                return True
+        return False
 
     # ---------------------------------------------- scene / format detection
 

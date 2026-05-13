@@ -333,12 +333,12 @@ const BUMP_MAP = Object.fromEntries(BUMP_LIB.map(b=>[b.id,b]));
 const BUMP_CATS = [...new Set(BUMP_LIB.map(b=>b.cat))];
 
 const RATE_TIERS = [
-  {id:'sag',      label:'SAG',              def:182},
-  {id:'sag_hi',   label:'SAG (Hi Rate)',    def:120},
-  {id:'nonunion', label:'Non-Union',        def:120},
-  {id:'standin',  label:'Stand-In',         def:214},
-  {id:'driver',   label:'Precision Driver', def:400},
-  {id:'custom',   label:'Custom Rate',      def:0},
+  {id:'sag',      label:'SAG',                   def:224},
+  {id:'sag_hi',   label:'SAG Special Performer', def:234},
+  {id:'nonunion', label:'Non-Union',             def:160},
+  {id:'standin',  label:'Stand-In',              def:262},
+  {id:'driver',   label:'Precision Driver',      def:400},
+  {id:'custom',   label:'Custom Rate',           def:0},
 ];
 const RATE_MAP = Object.fromEntries(RATE_TIERS.map(r=>[r.id,r]));
 
@@ -346,8 +346,17 @@ const CONTRACT_TYPES = [
   {id:'tv',         label:'TV — SAG Basic Agreement',        sagMin:25},
   {id:'theatrical', label:'Theatrical — SAG Basic Agreement',sagMin:85},
   {id:'lowbudget',  label:'Low Budget / Modified Agreement', sagMin:0},
+  {id:'nonunion',   label:'Non-Union',                       sagMin:0},
   {id:'custom',     label:'Custom',                          sagMin:0},
 ];
+// Default $/8-hour rates for each tier. User-editable on Setup → Contract card.
+// Applied to NEW roles (parser import + Quick BG entry). On contract change, user
+// is prompted whether to re-apply to existing roles.
+const DEFAULT_RATES_FACTORY = {sag:224, sag_hi:234, nonunion:160, standin:262};
+// One-shot bump: users who got the previous factory values stamped into their
+// localStorage should auto-upgrade. Customized values are preserved (only an
+// exact match against the old factory triggers replacement).
+const OLD_DEFAULT_RATES_v1 = {sag:182, sag_hi:120, nonunion:160, standin:214};
 
 // ══════════════════════════════════════════════════════════
 // STATE
@@ -366,6 +375,9 @@ if(state.show.sagMin===undefined) state.show.sagMin=25;
 if(state.show.role===undefined) state.show.role='';
 if(state.show.isSeries===undefined) state.show.isSeries=false;
 if(state.show.showCost===undefined) state.show.showCost=true;
+if(!state.show.defaultRates) state.show.defaultRates={...DEFAULT_RATES_FACTORY};
+else if(JSON.stringify(state.show.defaultRates)===JSON.stringify(OLD_DEFAULT_RATES_v1))
+  state.show.defaultRates={...DEFAULT_RATES_FACTORY};
 
 let currentTab='breakdown';
 let expandedDays={};
@@ -599,7 +611,7 @@ function renderSetup(){
   </div>
 
   <div class="card setup-card">
-    <div class="card-title"><span><span class="accent">◆</span> SAG-AFTRA Contract</span></div>
+    <div class="card-title"><span><span class="accent">◆</span> Contract</span></div>
     <div class="fg g2">
       <div class="form-group">
         <label class="lbl">Contract Type</label>
@@ -612,10 +624,38 @@ function renderSetup(){
     </div>
     <div class="contract-box">
       <div class="rule">
-        <strong>Rule:</strong> The first <strong>${s.sagMin}</strong> background actors each shooting day must be SAG-AFTRA covered before any Non-Union extras may be hired.<br>
-        <strong>Stand-ins</strong> are always SAG and are counted separately — they do not apply toward the BG minimum.<br>
-        ${s.contractType==='lowbudget'||s.contractType==='custom'?'<span style="color:#e9c46a">⚠ Verify minimum requirements with your specific contract.</span>':''}
+        ${s.contractType==='nonunion'
+          ? `<strong>Non-Union show.</strong> No SAG minimum. Set the Non-Union default rate below — applied to new background roles.`
+          : `<strong>Rule:</strong> The first <strong>${s.sagMin}</strong> background actors each shooting day must be SAG-AFTRA covered before any Non-Union extras may be hired.<br><strong>Stand-ins</strong> are always SAG and are counted separately — they do not apply toward the BG minimum.`}
+        ${s.contractType==='lowbudget'||s.contractType==='custom'||s.contractType==='nonunion'?'<br><span style="color:#e9c46a">⚠ Verify rate and minimum requirements with your specific contract / locale.</span>':''}
       </div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--br)">
+      <div style="font-size:12px;color:var(--tlbl);font-weight:600;letter-spacing:0.04em;margin-bottom:8px">DEFAULT RATES ($ / 8 hr)</div>
+      <div class="fg g3" style="margin-bottom:6px">
+        <div class="form-group">
+          <label class="lbl">SAG</label>
+          <input class="inp" type="number" min="0" step="1" value="${s.defaultRates.sag}" oninput="updateDefaultRate('sag',this.value)">
+        </div>
+        <div class="form-group">
+          <label class="lbl">SAG Special Performer</label>
+          <input class="inp" type="number" min="0" step="1" value="${s.defaultRates.sag_hi}" oninput="updateDefaultRate('sag_hi',this.value)">
+        </div>
+        <div class="form-group">
+          <label class="lbl">Non-Union</label>
+          <input class="inp" type="number" min="0" step="1" value="${s.defaultRates.nonunion}" oninput="updateDefaultRate('nonunion',this.value)">
+        </div>
+      </div>
+      <div class="fg g3">
+        <div class="form-group">
+          <label class="lbl">Stand-In</label>
+          <input class="inp" type="number" min="0" step="1" value="${s.defaultRates.standin}" oninput="updateDefaultRate('standin',this.value)">
+        </div>
+        <div class="form-group" style="grid-column:span 2;display:flex;align-items:end">
+          <button class="btn btn-secondary btn-sm" onclick="applyDefaultRatesToAll()" title="Overwrite base rates on all existing background roles with these defaults">↻ Apply to existing roles</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:6px">New imported roles use these rates. Per-role custom rates can be edited in the Breakdown.</div>
     </div>
   </div>
 
@@ -650,7 +690,43 @@ function onContractChange(val){
   const ct=CONTRACT_TYPES.find(c=>c.id===val)||CONTRACT_TYPES[0];
   state.show.contractType=val;
   state.show.sagMin=ct.sagMin;
+  // For non-union shows, flip every existing role's tier to nonunion as a default
+  // assumption — user can override per role. We only prompt if there are roles.
+  const hasRoles=(state.days||[]).some(d=>(d.scenes||[]).some(sc=>(sc.roles||[]).length>0));
+  save();
+  if(hasRoles){
+    const msg=val==='nonunion'
+      ? 'Apply Non-Union tier and the current Non-Union default rate to all existing background roles?'
+      : 'Apply current default rates to all existing background roles? (Their tiers will be kept.)';
+    if(confirm(msg)){
+      if(val==='nonunion') retierAllRoles('nonunion');
+      applyDefaultRatesToAll(true);
+      return; // applyDefaultRatesToAll re-renders
+    }
+  }
+  render();
+}
+
+function updateDefaultRate(tierId,val){
+  const n=parseFloat(val);
+  state.show.defaultRates[tierId]=isNaN(n)?0:n;
+  save();
+}
+
+function applyDefaultRatesToAll(silent){
+  const dr=state.show.defaultRates||{};
+  let n=0;
+  (state.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(r=>{
+    const newRate=dr[r.tier];
+    if(newRate!==undefined && newRate!==null){r.baseRate=newRate; n++;}
+  })));
   save(); render();
+  if(!silent) alert(n?`Updated base rate on ${n} role${n===1?'':'s'}.`:'No background roles to update.');
+}
+
+function retierAllRoles(tierId){
+  (state.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(r=>{r.tier=tierId;})));
+  save();
 }
 
 function deleteStandin(id){
@@ -959,7 +1035,7 @@ function openStandinModal(id){
     </div>
     <div class="fg g2">
       <div class="form-group"><label class="lbl">Rate ($/8hr)</label>
-        <input class="inp" id="si-rate" type="number" value="${si?.rate||214}"></div>
+        <input class="inp" id="si-rate" type="number" value="${si?.rate||(state.show.defaultRates?.standin||262)}"></div>
       <div class="form-group"><label class="lbl">Default Hours/Day</label>
         <input class="inp" id="si-hrs" type="number" step="0.5" min="8" value="${si?.defaultHours||12}"></div>
     </div>
@@ -973,7 +1049,7 @@ function saveStandin(id){
   const name=document.getElementById('si-name').value.trim();
   if(!name){alert('Name required');return;}
   const si={id:id||uid(),name,character:document.getElementById('si-char').value.trim(),
-    rate:parseFloat(document.getElementById('si-rate').value)||214,
+    rate:parseFloat(document.getElementById('si-rate').value)||(state.show.defaultRates?.standin||262),
     defaultHours:Math.max(8,parseFloat(document.getElementById('si-hrs').value)||12)};
   state.standins=state.standins.filter(s=>s.id!==si.id);
   state.standins.push(si);
@@ -1079,7 +1155,11 @@ function parseQuickBGText(text){
       rest=rest.replace(hm[0],'').trim().replace(/\s+/g,' ');
     }
     const type=rest.replace(/^for\s+/i,'').trim();
-    if(type) roles.push({id:uid(),type,count,tier:'sag',baseRate:182,hours,bumps:[],notes:'',minors:false});
+    if(type){
+      const tier=state.show.contractType==='nonunion'?'nonunion':'sag';
+      const baseRate=(state.show.defaultRates&&state.show.defaultRates[tier])||(tier==='nonunion'?160:224);
+      roles.push({id:uid(),type,count,tier,baseRate,hours,bumps:[],notes:'',minors:false});
+    }
   }
   return roles;
 }
@@ -1183,7 +1263,7 @@ function openRoleModal(dayId,sceneId,roleId){
       <div class="form-group"><label class="lbl">Rate Tier</label>
         <select class="sel" id="r-tier" onchange="onTierChange(this.value)">${tierOpts}</select></div>
       <div class="form-group"><label class="lbl">Base Rate ($)</label>
-        <input class="inp" id="r-rate" type="number" value="${role?.baseRate||182}" oninput="updatePay()"></div>
+        <input class="inp" id="r-rate" type="number" value="${role?.baseRate||(state.show.defaultRates?.sag||224)}" oninput="updatePay()"></div>
       <div class="form-group"><label class="lbl">Hours</label>
         <input class="inp" id="r-hours" type="number" min="8" max="24" step="0.5" value="${role?.hours||8}" oninput="updatePay()"></div>
     </div>
@@ -1319,7 +1399,7 @@ function openDayStandinModal(dayId, siId){
     </div>
     <div class="fg g2">
       <div class="form-group"><label class="lbl">Rate ($/8hr)</label>
-        <input class="inp" id="dsi-rate" type="number" value="${si?.rate||214}"></div>
+        <input class="inp" id="dsi-rate" type="number" value="${si?.rate||(state.show.defaultRates?.standin||262)}"></div>
       <div class="form-group"><label class="lbl">Hours This Day</label>
         <input class="inp" id="dsi-hrs" type="number" step="0.5" min="8" value="${si?.hours||12}"></div>
     </div>
@@ -1339,7 +1419,7 @@ function saveDayStandin(dayId,siId){
     id:siId||uid(),
     name,
     character:document.getElementById('dsi-char').value.trim(),
-    rate:parseFloat(document.getElementById('dsi-rate').value)||214,
+    rate:parseFloat(document.getElementById('dsi-rate').value)||(state.show.defaultRates?.standin||262),
     hours:Math.max(8,parseFloat(document.getElementById('dsi-hrs').value)||12)
   };
   day.dayStandins=day.dayStandins.filter(s=>s.id!==si.id);
@@ -1594,8 +1674,25 @@ function updatePdfBtn(){
 // ══════════════════════════════════════════════════════════
 
 function _applyFreshImport(s){
-  state=s;
+  // Carry over user-configured show fields (contract type, default rates, role,
+  // etc.) — the parser ships factory defaults that should not overwrite anything
+  // the user has already set up on the Setup tab.
+  const prev=state.show||{};
+  const merged={...s.show};
+  ['contractType','sagMin','defaultRates','preparedBy','role','isSeries','showCost'].forEach(k=>{
+    if(prev[k]!==undefined && prev[k]!==null && prev[k]!=='') merged[k]=prev[k];
+  });
+  if(!merged.defaultRates) merged.defaultRates={...DEFAULT_RATES_FACTORY};
+  state=s; state.show=merged;
   if(state.show.isSeries===undefined) state.show.isSeries=false;
+  // Re-tier and re-rate imported roles to match the show's contract settings.
+  const defaultTier=merged.contractType==='nonunion'?'nonunion':'sag';
+  const dr=merged.defaultRates||{};
+  (state.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(r=>{
+    r.tier=defaultTier;
+    const rate=dr[defaultTier];
+    if(rate!==undefined&&rate!==null) r.baseRate=rate;
+  })));
   _saveId=null; _saveName=null;
   save(); currentTab='breakdown'; render(); updateNavInfo();
   showToast(`Imported: ${s.days.length} days`);

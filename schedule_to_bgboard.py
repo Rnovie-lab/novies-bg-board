@@ -230,7 +230,7 @@ def _convert_bg_actor_to_role(bg_actor: Dict) -> Dict:
         "type": bg_actor.get("type", "Background").strip(),
         "count": bg_actor.get("count", 1),
         "tier": "sag",       # Default to SAG union rate
-        "baseRate": 182,     # SAG rate $182/8hrs
+        "baseRate": 224,     # SAG rate $224/8hrs (front-end re-rates per show defaults on import)
         "hours": 8,
         "bumps": bumps,      # Array of {id, category, name, amt} objects
         "reuse": False,
