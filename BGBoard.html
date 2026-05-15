@@ -289,7 +289,7 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
   <div class="nav-actions">
     <label class="btn btn-primary btn-sm" id="pdf-import-btn" style="cursor:pointer" title="Import a scheduling PDF"><span id="pdf-import-label">↓ Import PDF</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label>
     <button class="btn btn-secondary btn-sm" onclick="openSaveAs()" title="Save current breakdown">💾 Save</button>
-    <button class="btn btn-secondary btn-sm" onclick="resetAll()" title="Wipe the current in-progress board · saved projects are not affected">Discard</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetAll()" title="Wipe the current in-progress board · saved projects are not affected">Delete</button>
   </div>
   <div class="nav-show-info" id="nav-info"></div>
 </div>
@@ -2538,7 +2538,7 @@ function resetAll(){
     : (_hasSubstance()
         ? `\n\nThis board is NOT saved. To keep it, click Cancel and use 📂 Projects → "New Episode" instead (auto-saves first).`
         : '');
-  if(!confirm('Discard the current in-progress board?'+savedHint))return;
+  if(!confirm('Delete the current in-progress board?'+savedHint))return;
   state=defaultState();_saveId=null;_saveName=null;expandedDays={};
   // Visually clear the current view BEFORE rendering the new one. This
   // gives the user immediate feedback that Discard took effect, even on
