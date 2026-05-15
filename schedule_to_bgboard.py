@@ -39,37 +39,20 @@ def convert_schedule_to_bgboard(pdf_path: str, format_type: str = "auto") -> Dic
         "sagMin": 25
     }
 
-    # Extract ALL shooting days from the PDF (even those without background actors)
-    # This ensures we show all 18 days even if some don't have BG actors assigned yet
+    # Determine the full range of shooting days so empty days still render.
+    # final_day is set by the parser based on the highest "End of Day N" marker.
+    final_day = parsed.get("metadata", {}).get("final_day")
     all_day_numbers = set()
-    try:
-        import re
-        import pdfplumber
-        with pdfplumber.open(pdf_path) as pdf:
-            all_text = ""
-            for page in pdf.pages:
-                all_text += page.extract_text() + "\n"
+    if isinstance(final_day, int) and final_day > 0:
+        all_day_numbers = set(range(1, final_day + 1))
 
-        # Find all "End of Day X" markers
-        day_pattern = r'End of Day (\d+)\s*\|'
-        for match in re.finditer(day_pattern, all_text):
-            day_num = int(match.group(1))
-            all_day_numbers.add(day_num)
-    except Exception as e:
-        print(f"Warning: Could not extract all day numbers from PDF: {e}")
-
-    # Group scenes by shooting day (extracted from "End of Day X" markers)
+    # Group scenes by shooting day.
     days_dict = {}
     for scene in parsed["scenes"]:
-        # Use shooting_day if available (from Shamel format), otherwise fall back to time_of_day
         day_key = scene.get("shooting_day") or scene.get("time_of_day") or "Unknown"
+        days_dict.setdefault(day_key, []).append(scene)
 
-        if day_key not in days_dict:
-            days_dict[day_key] = []
-
-        days_dict[day_key].append(scene)
-
-    # Ensure all extracted days are in the dict (even if empty)
+    # Ensure all in-range days are in the dict (even if empty)
     for day_num in all_day_numbers:
         if day_num not in days_dict:
             days_dict[day_num] = []
@@ -113,10 +96,17 @@ def convert_schedule_to_bgboard(pdf_path: str, format_type: str = "auto") -> Dic
 
         days.append(day_data)
 
+    # Boneyard: scenes past the final "End of Day N" marker — omitted strips,
+    # stock footage, etc. Same scene shape as in `days`, but no day grouping.
+    boneyard_scenes = [
+        _convert_scene_to_bgboard(scene) for scene in parsed.get("boneyard", [])
+    ]
+
     return {
         "show": show_data,
         "standins": [],  # Top-level standins array (required by BGBoard app)
         "days": days,
+        "boneyard": boneyard_scenes,
         "metadata": parsed["metadata"]
     }
 

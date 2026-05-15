@@ -67,7 +67,7 @@
     gap: 18px;
   }
   .header-logo img {
-    height: 58px;
+    height: 87px;
     display: block;
     border-radius: 7px;
   }
@@ -83,9 +83,9 @@
   }
   .header-audience {
     font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 700;
-    font-size: 9px;
-    letter-spacing: 2.8px;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     color: var(--accent2);
     margin-bottom: 5px;
@@ -125,26 +125,27 @@
 
   /* ── WORKFLOW BAND ── */
   .workflow-band {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    background: transparent;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     padding: 13px 26px;
   }
   .band-label {
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 8.5px;
-    letter-spacing: 2.8px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 2px;
     text-transform: uppercase;
     color: var(--muted);
     margin-bottom: 10px;
   }
   .workflow-steps {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
   }
   .workflow-step {
     flex: 1;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 9px;
   }
   .step-num {
@@ -155,6 +156,7 @@
     line-height: 1;
     letter-spacing: -0.5px;
     flex-shrink: 0;
+    padding-top: 9px;
   }
   .step-inner {}
   .step-title {
@@ -178,7 +180,7 @@
     font-size: 15px;
     margin: 0 4px;
     flex-shrink: 0;
-    padding-bottom: 10px;
+    padding-top: 18px;
   }
 
   /* ── FEATURE GRID ── */
@@ -191,10 +193,11 @@
 
   .sec-label {
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 8px;
-    letter-spacing: 2.5px;
+    font-weight: 700;
+    font-size: 10.5px;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--accent2);
     margin-bottom: 8px;
     display: flex;
     align-items: center;
@@ -219,11 +222,14 @@
   /* Import New Draft — hero card */
   .feat-card.hero {
     background: linear-gradient(135deg, #0a1520 0%, #0e1e35 100%);
-    border-color: rgba(42,127,196,0.45);
-    border-left: 3px solid var(--accent);
+    border-color: rgba(42,127,196,0.35);
   }
-  .feat-card.accent-green { border-top: 2px solid rgba(61,158,106,0.5); }
-  .feat-card.accent-gold  { border-top: 2px solid rgba(233,196,106,0.4); }
+  .feat-card.accent-yellow { border-top: 2px solid rgba(244,196,48,0.85); }
+  .feat-card.accent-orange { border-top: 2px solid rgba(220,110,40,0.85); }
+  .feat-card.accent-green  { border-top: 2px solid rgba(50,180,100,0.85); }
+  .feat-card.accent-blue   { border-top: 2px solid rgba(42,127,196,0.85); }
+  .feat-card.accent-purple { border-top: 2px solid rgba(155,100,220,0.85); }
+  .feat-card.accent-red    { border-top: 2px solid rgba(210,65,65,0.85); }
 
   .feat-header {
     display: flex;
@@ -243,9 +249,9 @@
   .feat-title.hero-title { font-size: 16px; color: #fff; }
   .feat-subtitle {
     font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 400;
-    font-size: 9px;
-    letter-spacing: 1.5px;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--muted);
     margin-top: 1px;
@@ -330,8 +336,8 @@
   .standins-heading {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 900;
-    font-size: 10px;
-    letter-spacing: 2px;
+    font-size: 12px;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
     color: var(--accent2);
     margin-top: 3px;
@@ -356,7 +362,7 @@
 
   /* ── TIPS BAND ── */
   .tips-band {
-    margin: 9px 26px 16px;
+    margin: 9px 26px 0;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 8px;
@@ -371,11 +377,11 @@
   .tip-label {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 800;
-    font-size: 10px;
-    letter-spacing: 1.2px;
+    font-size: 12px;
+    letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--accent2);
-    margin-bottom: 4px;
+    margin-bottom: 5px;
   }
   .tip-body {
     font-size: 9.5px;
@@ -399,6 +405,12 @@
     letter-spacing: 1.8px;
     text-transform: uppercase;
     color: var(--dim);
+  }
+
+  /* ── LOWER SECTION WRAPPER ── */
+  .lower-section {
+    background: #383940;
+    padding-bottom: 18px;
   }
 
   @media print {
@@ -427,6 +439,7 @@
     </div>
   </div>
 
+  <div class="lower-section">
   <!-- ══ WORKFLOW ══ -->
   <div class="workflow-band">
     <div class="band-label">Daily Workflow</div>
@@ -483,7 +496,7 @@
   <div class="feat-grid">
 
     <!-- PDF Import -->
-    <div class="feat-card">
+    <div class="feat-card accent-yellow">
       <div class="sec-label">Scheduling</div>
       <div class="feat-header">
         <svg class="feat-icon" viewBox="0 0 30 30" fill="none">
@@ -501,7 +514,7 @@
     </div>
 
     <!-- Scene Strips -->
-    <div class="feat-card">
+    <div class="feat-card accent-orange">
       <div class="sec-label">Organization</div>
       <div class="feat-header">
         <svg class="feat-icon" viewBox="0 0 30 30" fill="none">
@@ -545,7 +558,7 @@
     </div>
 
     <!-- HERO: Import New Draft -->
-    <div class="feat-card hero">
+    <div class="feat-card hero accent-blue">
       <div class="sec-label">Revision Management</div>
       <div class="feat-header">
         <svg class="feat-icon" viewBox="0 0 30 30" fill="none">
@@ -562,30 +575,11 @@
           <div class="feat-subtitle">Smart revision merge</div>
         </div>
       </div>
-      <div class="feat-body">When a <strong>revised schedule arrives mid-prep</strong>, import it over your existing work. BG Board compares the new draft against your current breakdown and shows exactly what changed — <strong>your existing BG roles, bumps, and notes are fully preserved</strong> on all unchanged scenes.</div>
-      <div class="diff-items">
-        <div class="diff-item added">
-          <span class="diff-item-label">New Scenes</span>
-          <span class="diff-item-desc"><strong>Added</strong> to the schedule — select to bring in</span>
-        </div>
-        <div class="diff-item removed">
-          <span class="diff-item-label">Dropped Scenes</span>
-          <span class="diff-item-desc">No longer on the board — choose to remove</span>
-        </div>
-        <div class="diff-item moved">
-          <span class="diff-item-label">Moved to New Day</span>
-          <span class="diff-item-desc">Scene shifted to a <strong>different shoot day</strong></span>
-        </div>
-        <div class="diff-item changed">
-          <span class="diff-item-label">Location Changed</span>
-          <span class="diff-item-desc">Set or description <strong>updated</strong> in new draft</span>
-        </div>
-      </div>
-      <div class="hero-note">Each change is individually selectable — apply only what you need.</div>
+      <div class="feat-body">When a <strong>revised schedule arrives mid-prep</strong>, import it and BG Board compares the new draft against your current breakdown and shows exactly what changed — <strong>your existing BG roles, bumps, and notes are fully preserved</strong> on all unchanged scenes.</div>
     </div>
 
     <!-- Bump Library -->
-    <div class="feat-card accent-gold">
+    <div class="feat-card accent-purple">
       <div class="sec-label">Compensation</div>
       <div class="feat-header">
         <svg class="feat-icon" viewBox="0 0 30 30" fill="none">
@@ -604,7 +598,7 @@
     </div>
 
     <!-- Save & Export -->
-    <div class="feat-card">
+    <div class="feat-card accent-red">
       <div class="sec-label">Projects</div>
       <div class="feat-header">
         <svg class="feat-icon" viewBox="0 0 30 30" fill="none">
@@ -670,6 +664,8 @@
       <div class="tip-body">Go to <strong>Export tab → Print / Save as PDF</strong>. Choose <em>Save as PDF</em> in your print dialog. Lists every day's SI roster, scenes, roles, bumps, and running totals.</div>
     </div>
   </div>
+
+  </div><!-- /lower-section -->
 
   <!-- ══ FOOTER ══ -->
   <div class="footer">

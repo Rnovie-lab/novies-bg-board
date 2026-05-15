@@ -62,8 +62,8 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 
 /* FORM */
 .fg{display:grid;gap:14px;margin-bottom:14px}
-.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:1fr 1fr 1fr 1fr}
-.form-group{display:flex;flex-direction:column;gap:5px}
+.g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.g3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}.g4{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
+.form-group{display:flex;flex-direction:column;gap:5px;min-width:0}
 .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--tlbl)}
 .inp{background:var(--bg-inp);border:1px solid var(--br);border-radius:4px;padding:8px 11px;color:var(--t1);width:100%;transition:border-color 0.15s}
 .inp:focus{border-color:#2a7fc4}
@@ -73,13 +73,13 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .setup-card{border-color:var(--br)!important}
 
 /* BUTTONS */
-.btn{padding:7px 14px;border-radius:4px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;letter-spacing:0.3px;border:none;cursor:pointer;font-family:inherit;transition:background 0.12s}
-.btn-primary{background:#2a7fc4;color:#fff}.btn-primary:hover{background:#1a6ab0}
-.btn-secondary{background:var(--bg-bs);color:var(--t4)}.btn-secondary:hover{background:var(--bg-bsh);color:var(--t1)}
-.btn-success{background:#2d7a50;color:#fff}.btn-success:hover{background:#247042}
-.btn-ghost{background:transparent;color:var(--tmut);padding:5px 8px}.btn-ghost:hover{color:var(--t3);background:var(--bg-el)}
-.btn-danger{background:var(--bg-dn);color:#e63946;border:1px solid var(--bg-dnh)}.btn-danger:hover{background:var(--bg-dnh)}
-.btn-sm{padding:4px 10px;font-size:11px}.btn-xs{padding:3px 7px;font-size:11px}
+.btn{padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;cursor:pointer;font-family:inherit;transition:background 0.12s,border-color 0.12s,color 0.12s}
+.btn-primary{background:#2a7fc4;color:#fff;border-color:#2a7fc4}.btn-primary:hover{background:#1a6ab0;border-color:#1a6ab0}
+.btn-secondary{background:var(--bg-card);color:var(--t2);border-color:var(--br)}.btn-secondary:hover{background:var(--bg-bsh);color:var(--t1);border-color:var(--br3)}
+.btn-success{background:#2d7a50;color:#fff;border-color:#2d7a50}.btn-success:hover{background:#247042;border-color:#247042}
+.btn-ghost{background:transparent;color:var(--tmut);padding:7px 10px;border-color:transparent}.btn-ghost:hover{color:var(--t3);background:var(--bg-el)}
+.btn-danger{background:var(--bg-dn);color:#e63946;border-color:var(--bg-dnh)}.btn-danger:hover{background:var(--bg-dnh);border-color:#e63946}
+.btn-sm{padding:6px 11px;font-size:12px;border-radius:7px}.btn-xs{padding:4px 8px;font-size:11px;border-radius:6px}
 
 /* STANDINS ROSTER */
 .si-item{background:var(--bg-sun);border:1px solid var(--br2);border-radius:6px;padding:11px 14px;display:flex;align-items:center;gap:14px;margin-bottom:8px}
@@ -119,12 +119,12 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .si-working.on{color:#52b788}.si-working.off{color:var(--tvfnt)}
 
 /* SCENE */
-.scene-block{margin-bottom:18px;border-left:3px solid var(--br2);padding-left:0;border-radius:0 0 0 0}
+.scene-block{margin-bottom:10px;border-left:3px solid var(--br2);padding-left:0;border-radius:0 0 0 0}
 .scene-id{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#3a6ea8;background:var(--bg-sid);padding:2px 7px;border-radius:3px}
 .scene-set{font-size:13px;font-weight:700;color:var(--t2)}
 .scene-desc{font-size:11px;color:var(--tmut)}
 /* scene header spans full width — badge + set stack via flex-wrap */
-tr.scene-hdr-row>td{background:var(--bg-sh);padding:6px 6px;vertical-align:middle}
+tr.scene-hdr-row>td{background:var(--bg-sh);padding:3px 6px;vertical-align:middle}
 tr.scene-hdr-row>.shdr-main{padding-left:12px;padding-right:6px}
 .shdr-inner{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
 .shdr-inner .scene-set{flex:1;min-width:120px;word-break:break-word}
@@ -142,8 +142,8 @@ tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10
 .roles-table colgroup .col-bumps{width:90px}
 .roles-table colgroup .col-notes{width:90px}
 .roles-table colgroup .col-reuse{width:auto}
-.roles-table th{text-align:left;padding:6px 9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--tlbl);border-bottom:1px solid var(--br6);background:var(--bg-th)}
-.roles-table td{padding:8px 9px;border-bottom:1px solid var(--br5);vertical-align:middle}
+.roles-table th{text-align:left;padding:4px 9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--tlbl);border-bottom:1px solid var(--br6);background:var(--bg-th)}
+.roles-table td{padding:4px 9px;border-bottom:1px solid var(--br5);vertical-align:middle}
 .roles-table tbody tr{cursor:pointer;transition:background 0.1s}
 .roles-table tbody tr:nth-child(even) td{background:var(--bg-ra)}
 .roles-table tbody tr:hover td{background:var(--bg-rh)!important}
@@ -167,6 +167,7 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 .bump-tags{display:flex;flex-wrap:wrap;gap:3px}
 .bump-tag{background:var(--bg-bt);color:var(--tfnt);font-size:10px;padding:2px 6px;border-radius:3px;border:1px solid var(--br2)}
 .reuse-tag{background:var(--bg-rt);color:#3d9e6a;font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;letter-spacing:0.2px;display:inline-block;text-align:left}
+.reuse-tag-auto{background:transparent;color:var(--tmut);border:1px dashed var(--br);font-weight:600}
 .ot-warn{font-size:10px;color:#e63946;font-weight:700;margin-left:4px}
 
 /* TOTALS BAR */
@@ -264,6 +265,10 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 .scene-block.drag-over-top{border-top:2px solid #3a90d4!important;margin-top:-2px}
 .scene-block.drag-over-bottom{border-bottom:2px solid #3a90d4!important}
 .scene-block.dragging{opacity:0.35}
+.day-block.drag-over-day{outline:2px dashed #3a90d4;outline-offset:-2px}
+.day-block.boneyard-block{margin-top:18px;opacity:0.92}
+.day-block.boneyard-block .day-hdr{background:#6b7280}
+.day-block.boneyard-block.drag-over-day{outline-color:#9ca3af}
 .badge-day-si{background:var(--bg-bdsi);color:#3d9e6a;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:0.3px;vertical-align:middle;margin-left:4px}
 .si-day-row-actions{display:flex;align-items:center;gap:4px}
 /* THEME TOGGLE */
@@ -274,17 +279,17 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 <body>
 <div id="nav">
   <div class="nav-brand"><img src="bgboard-logo.png" alt="Novie's BG Board" style="height:100px;display:block;border-radius:8px"></div>
+  <button class="btn btn-secondary btn-sm" onclick="openSavesPanel()" title="View saved projects · start a new episode" style="margin-right:12px">📂 Projects</button>
   <div class="nav-tabs">
     <button class="nav-tab" data-tab="setup">Setup</button>
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
     <button class="nav-tab" data-tab="export">Export</button>
   </div>
-  <button onclick="reportIssue()" style="background:#8b1a1a;color:#ffaaaa;border:none;border-radius:5px;padding:4px 11px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:0.05em;flex-shrink:0;margin:0 14px">⚑ Report Issue</button>
+  <button class="btn btn-secondary btn-sm" onclick="reportIssue()" title="Report a problem to the developer" style="margin:0 12px;color:#c05050;border-color:rgba(192,80,80,0.4)">⚑ Report Issue</button>
   <div class="nav-actions">
     <label class="btn btn-primary btn-sm" id="pdf-import-btn" style="cursor:pointer" title="Import a scheduling PDF"><span id="pdf-import-label">↓ Import PDF</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label>
     <button class="btn btn-secondary btn-sm" onclick="openSaveAs()" title="Save current breakdown">💾 Save</button>
-    <button class="btn btn-secondary btn-sm" onclick="openSavesPanel()" title="View saved projects">📂 Projects</button>
-    <button class="btn btn-danger btn-sm" onclick="resetAll()">Reset</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetAll()" title="Wipe the current in-progress board · saved projects are not affected">Discard</button>
   </div>
   <div class="nav-show-info" id="nav-info"></div>
 </div>
@@ -365,7 +370,8 @@ function defaultState(){
   return {
     show:{name:'',episode:'',version:'1',preparedBy:'',role:'',contractType:'tv',sagMin:25,isSeries:false},
     standins:[],
-    days:[]
+    days:[],
+    boneyard:[]
   };
 }
 let state=(()=>{try{const s=localStorage.getItem('bgboard');return s?JSON.parse(s):defaultState();}catch(e){return defaultState();}})();
@@ -375,6 +381,7 @@ if(state.show.sagMin===undefined) state.show.sagMin=25;
 if(state.show.role===undefined) state.show.role='';
 if(state.show.isSeries===undefined) state.show.isSeries=false;
 if(state.show.showCost===undefined) state.show.showCost=true;
+if(!Array.isArray(state.boneyard)) state.boneyard=[];
 if(!state.show.defaultRates) state.show.defaultRates={...DEFAULT_RATES_FACTORY};
 else if(JSON.stringify(state.show.defaultRates)===JSON.stringify(OLD_DEFAULT_RATES_v1))
   state.show.defaultRates={...DEFAULT_RATES_FACTORY};
@@ -413,11 +420,50 @@ function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 
 function getDayStats(day){
   let sag=0,nu=0,cost=0;
-  day.scenes.forEach(sc=>(sc.roles||[]).forEach(r=>{
+  // Reuse model (per role):
+  //  • role.reuseOf = {roleId:'xxx', count:N>0}   → explicit reuse of N people from role xxx
+  //  • role.reuseOf = {roleId:'',    count:0}     → explicit "None / different people" (bypass auto)
+  //  • role.reuseOf absent                        → auto-by-name fallback: same name = same group,
+  //                                                 max-count wins, others contribute 0
+  const allRoles=[];
+  day.scenes.forEach(sc=>(sc.roles||[]).forEach(r=>allRoles.push(r)));
+  const idSet=new Set(allRoles.map(r=>r.id));
+
+  // Auto-bucket: only roles WITHOUT explicit reuseOf participate. For each
+  // normalized non-empty name, the max-count role wins; others get 0.
+  const autoWinner=new Map(); // key: normalized name → roleId
+  const autoCand=new Map();   // key → {n, roleId}
+  allRoles.forEach(r=>{
+    if(r.reuseOf) return;
+    const key=(r.type||'').trim().toLowerCase();
+    if(!key) return;
     const n=parseInt(r.count)||1;
-    if(r.tier==='nonunion') nu+=n; else sag+=n;
-    cost+=calcPay(r.baseRate,r.hours,r.bumps)*n;
-  }));
+    const prev=autoCand.get(key);
+    if(!prev||n>prev.n) autoCand.set(key,{n,roleId:r.id});
+  });
+  autoCand.forEach((v,k)=>autoWinner.set(k,v.roleId));
+
+  allRoles.forEach(r=>{
+    const n=parseInt(r.count)||1;
+    let contrib=n;
+    if(r.reuseOf){
+      const rc=parseInt(r.reuseOf.count)||0;
+      const parentId=r.reuseOf.roleId||'';
+      if(parentId&&rc>0&&idSet.has(parentId)){
+        contrib=Math.max(0,n-rc);
+      }
+      // explicit None or orphaned parent → contrib stays at full count
+    } else {
+      const key=(r.type||'').trim().toLowerCase();
+      if(key){
+        const winnerId=autoWinner.get(key);
+        if(winnerId&&winnerId!==r.id) contrib=0;
+      }
+    }
+    if(r.tier==='nonunion') nu+=contrib; else sag+=contrib;
+    cost+=calcPay(r.baseRate,r.hours,r.bumps)*contrib;
+  });
+
   const globalSiCount=state.standins.filter(si=>!(day.standinOff||{})[si.id]).length;
   const daySiCount=(day.dayStandins||[]).length;
   const siCount=globalSiCount+daySiCount;
@@ -430,19 +476,44 @@ function getSIHours(day,si){
   return h!==undefined?Math.max(8,h):Math.max(8,si.defaultHours||8);
 }
 
-function reuseInfo(roleType,excludeSceneId){
-  const matches=[];
-  if(!roleType||!roleType.trim()) return matches;
-  const q=roleType.trim().toLowerCase();
-  state.days.forEach(day=>{
-    day.scenes.forEach(sc=>{
-      if(sc.id===excludeSceneId) return;
-      (sc.roles||[]).forEach(r=>{
-        if((r.type||'').trim().toLowerCase()===q) matches.push(sc.sceneId||('Day '+day.dayNumber));
-      });
-    });
-  });
-  return [...new Set(matches)];
+// Display info for the Reuse column. Returns null, or {explicit, label}.
+//  • explicit reuse → "2 of 5 from Sc. 12 Teachers"
+//  • auto-link (loser side of same-name match) → "Auto-link: Sc. 12 Teachers"
+//  • explicit None, auto-link winners, anonymous, and roles with no peers → null
+function reuseDisplayInfo(role,day){
+  if(!role||!day) return null;
+  // Helper: find a role on this day by id, plus its scene
+  const findOnDay=(id)=>{
+    for(const sc of (day.scenes||[])){
+      const r=(sc.roles||[]).find(x=>x.id===id);
+      if(r) return {sc,r};
+    }
+    return null;
+  };
+  // Explicit reuse
+  if(role.reuseOf&&role.reuseOf.roleId&&(parseInt(role.reuseOf.count)||0)>0){
+    const found=findOnDay(role.reuseOf.roleId);
+    if(!found) return null; // orphan parent — render nothing
+    const ref=found.sc.sceneId?'Sc. '+found.sc.sceneId:('Day '+day.dayNumber);
+    return {explicit:true,label:`${role.reuseOf.count} of ${role.count||1} from ${ref}: ${found.r.type}`};
+  }
+  // Explicit None — show nothing (user opted out of any reuse display)
+  if(role.reuseOf) return null;
+  // Auto-by-name fallback display
+  const key=(role.type||'').trim().toLowerCase();
+  if(!key) return null;
+  let winnerId=null,maxN=-1;
+  (day.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(r=>{
+    if(r.reuseOf) return;
+    if((r.type||'').trim().toLowerCase()!==key) return;
+    const n=parseInt(r.count)||1;
+    if(n>maxN){maxN=n;winnerId=r.id;}
+  }));
+  if(!winnerId||winnerId===role.id) return null; // I'm the winner, or no peers
+  const found=findOnDay(winnerId);
+  if(!found) return null;
+  const ref=found.sc.sceneId?'Sc. '+found.sc.sceneId:('Day '+day.dayNumber);
+  return {explicit:false,label:`Auto-link: ${ref} ${found.r.type}`};
 }
 
 function sagMinWarning(day,stats){
@@ -490,14 +561,34 @@ function attachDayToggles(){
 }
 
 // ══════════════════════════════════════════════════════════
-// DRAG & DROP — Scene reordering within a day
+// DRAG & DROP — Scene reordering within a day, moving between days,
+// and archiving to/from the boneyard.
 // ══════════════════════════════════════════════════════════
 let _dragSceneId=null,_dragDayId=null;
+
+// Source resolver — finds the scene + its container (day or boneyard).
+// Returns {container, scenes, idx, scene} or null.
+function _findSceneSource(dayId, sceneId){
+  if(dayId==='__boneyard__'){
+    const arr=state.boneyard||[];
+    const idx=arr.findIndex(s=>s.id===sceneId);
+    if(idx<0) return null;
+    return {container:'boneyard', scenes:arr, idx, scene:arr[idx]};
+  }
+  const day=state.days.find(d=>d.id===dayId);
+  if(!day) return null;
+  const idx=(day.scenes||[]).findIndex(s=>s.id===sceneId);
+  if(idx<0) return null;
+  return {container:'day', day, scenes:day.scenes, idx, scene:day.scenes[idx]};
+}
+
+function _removeSceneFromSource(src){
+  return src.scenes.splice(src.idx,1)[0];
+}
 
 function attachDragHandlers(){
   document.querySelectorAll('.scene-block[draggable]').forEach(block=>{
     block.addEventListener('dragstart',e=>{
-      // Don't drag if clicking a button or input inside
       if(e.target.closest('button')||e.target.closest('input')||e.target.closest('select')) {
         e.preventDefault(); return;
       }
@@ -511,6 +602,8 @@ function attachDragHandlers(){
       block.classList.remove('dragging');
       document.querySelectorAll('.scene-block').forEach(b=>
         b.classList.remove('drag-over-top','drag-over-bottom'));
+      document.querySelectorAll('.day-block').forEach(b=>
+        b.classList.remove('drag-over-day'));
       _dragSceneId=null; _dragDayId=null;
     });
     block.addEventListener('dragover',e=>{
@@ -528,26 +621,76 @@ function attachDragHandlers(){
         block.classList.remove('drag-over-top','drag-over-bottom');
     });
     block.addEventListener('drop',e=>{
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       const targetSceneId=block.dataset.sceneId;
       const targetDayId=block.dataset.dayId;
       block.classList.remove('drag-over-top','drag-over-bottom');
       if(!_dragSceneId||_dragSceneId===targetSceneId) return;
-      if(_dragDayId!==targetDayId){
-        showToast('Drag scenes within the same day to reorder','error'); return;
-      }
-      const day=state.days.find(d=>d.id===_dragDayId);
-      if(!day) return;
-      const fromIdx=day.scenes.findIndex(s=>s.id===_dragSceneId);
-      let toIdx=day.scenes.findIndex(s=>s.id===targetSceneId);
-      if(fromIdx<0||toIdx<0) return;
+
+      const src=_findSceneSource(_dragDayId,_dragSceneId);
+      if(!src) return;
+      const tgt=_findSceneSource(targetDayId,targetSceneId);
+      if(!tgt) return;
+
+      const moved=_removeSceneFromSource(src);
+      // src removal may have shifted the target's idx if same container — recompute.
+      const tgtList=targetDayId==='__boneyard__'?(state.boneyard||[]):
+        (state.days.find(d=>d.id===targetDayId)||{}).scenes||[];
+      let toIdx=tgtList.findIndex(s=>s.id===targetSceneId);
+      if(toIdx<0) toIdx=tgtList.length;
       const rect=block.getBoundingClientRect();
       const dropBefore=e.clientY<(rect.top+rect.height/2);
-      const [moved]=day.scenes.splice(fromIdx,1);
-      toIdx=day.scenes.findIndex(s=>s.id===targetSceneId);
-      day.scenes.splice(dropBefore?toIdx:toIdx+1,0,moved);
+      tgtList.splice(dropBefore?toIdx:toIdx+1,0,moved);
       save(); render();
-      showToast('Scene reordered');
+      const where=targetDayId==='__boneyard__'?'Boneyard':
+        (_dragDayId===targetDayId?'reordered':`Day ${(state.days.find(d=>d.id===targetDayId)||{}).dayNumber||'?'}`);
+      showToast(`Scene → ${where}`);
+    });
+  });
+
+  // Day-block-level drop target: lets you drop onto an empty day or into a
+  // gap below the last scene. Also handles dropping into the boneyard.
+  document.querySelectorAll('.day-block').forEach(block=>{
+    const dayId=block.dataset.dayId
+      || block.querySelector('[data-day-id]')?.dataset.dayId;
+    if(!dayId) return;
+    block.addEventListener('dragover',e=>{
+      if(!_dragSceneId) return;
+      // Only highlight if the drop will actually go to this day (not a
+      // bubbling event from a scene block inside another day).
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      document.querySelectorAll('.day-block').forEach(b=>
+        b.classList.remove('drag-over-day'));
+      block.classList.add('drag-over-day');
+    });
+    block.addEventListener('dragleave',e=>{
+      if(!e.relatedTarget||!block.contains(e.relatedTarget))
+        block.classList.remove('drag-over-day');
+    });
+    block.addEventListener('drop',e=>{
+      // If the inner scene-block already handled the drop, skip.
+      if(e.defaultPrevented) return;
+      e.preventDefault();
+      block.classList.remove('drag-over-day');
+      if(!_dragSceneId) return;
+      // Resolve target day id from the block (boneyard uses sentinel id).
+      const targetDayId=block.classList.contains('boneyard-block')?'__boneyard__':
+        (block.dataset.dayId || block.querySelector('[data-day-id]')?.dataset.dayId);
+      if(!targetDayId||targetDayId===_dragDayId){return;}
+      const src=_findSceneSource(_dragDayId,_dragSceneId);
+      if(!src) return;
+      const moved=_removeSceneFromSource(src);
+      if(targetDayId==='__boneyard__'){
+        (state.boneyard=state.boneyard||[]).push(moved);
+      } else {
+        const day=state.days.find(d=>d.id===targetDayId);
+        if(!day){ src.scenes.splice(src.idx,0,moved); return; }
+        day.scenes.push(moved);
+      }
+      save(); render();
+      const where=targetDayId==='__boneyard__'?'Boneyard':`Day ${(state.days.find(d=>d.id===targetDayId)||{}).dayNumber||'?'}`;
+      showToast(`Scene → ${where}`);
     });
   });
 }
@@ -574,7 +717,24 @@ function renderSetup(){
 
   const roleOpts=['','1st AD','2nd AD','2nd 2nd AD','UPM'].map(r=>`<option value="${r}" ${(s.role||'')==r?'selected':''}>${r||'— select —'}</option>`).join('');
 
+  // When there are no shooting days yet, surface the two paths forward at
+  // the top of Setup so the user isn't stuck wondering what to do next.
+  const startBlock = state.days.length===0 ? `
+  <div class="card setup-card" style="background:var(--bg-el);border:1px dashed var(--br3)">
+    <div class="card-title"><span><span class="accent">◆</span> Get Started</span></div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:10px">Fill in show info below, then pick a path:</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <label class="btn btn-primary btn-sm" style="cursor:pointer">
+        <span>↓ Import a Shooting Schedule (PDF)</span>
+        <input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)">
+      </label>
+      <button class="btn btn-secondary btn-sm" onclick="startBlankBreakdown()">+ Start a Blank Breakdown</button>
+    </div>
+    <div style="font-size:11px;color:var(--tmut);margin-top:8px">Show name &amp; episode you enter here are preserved when you import.</div>
+  </div>` : '';
+
   return `
+  ${startBlock}
   <div class="card setup-card">
     <div class="card-title"><span><span class="accent">◆</span> Show Information</span></div>
     <div class="fg g3">
@@ -811,7 +971,7 @@ function renderBreakdown(){
     const scenesHTML=day.scenes.map(sc=>{
       const roles=(sc.roles||[]);
       const roleRows=roles.map(r=>{
-        const reuse=reuseInfo(r.type,sc.id);
+        const reuse=reuseDisplayInfo(r,day);
         const bTags=(r.bumps||[]).map(b=>`<span class="bump-tag">${esc(b.label)}</span>`).join('');
         const tier=RATE_MAP[r.tier]||{label:r.tier};
         const ot=parseFloat(r.hours)>8;
@@ -824,7 +984,7 @@ function renderBreakdown(){
           <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
           <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
           <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
-          <td>${reuse.length?`<span class="reuse-tag">Reuse: Sc. ${esc(reuse[0])}${reuse.length>1?', '+esc(reuse.slice(1).join(', ')):''}</span>`:''}</td>
+          <td>${reuse?`<span class="reuse-tag${reuse.explicit?'':' reuse-tag-auto'}">${esc(reuse.label)}</span>`:''}</td>
         </tr>`;
       }).join('');
 
@@ -858,7 +1018,7 @@ function renderBreakdown(){
       </div>`;
     }).join('');
 
-    return `<div class="day-block">
+    return `<div class="day-block" data-day-id="${day.id}">
       <div class="day-hdr" data-day-id="${day.id}">
         <div class="day-hdr-left">
           <span id="day-tog-${day.id}" style="color:#fff;font-size:11px;width:16px">${expanded?'▼':'▶'}</span>
@@ -887,7 +1047,7 @@ function renderBreakdown(){
           <div class="total-item"><span class="total-lbl">SAG</span><span class="total-val blue">${stats.sag}</span></div>
           <div class="total-item"><span class="total-lbl">Non-Union</span><span class="total-val purple">${stats.nu}</span></div>
           ${(state.show.showCost!==false)?`<div class="total-item" style="margin-left:auto"><span class="total-lbl">Est. Cost</span><span class="total-val green">${$m(stats.cost)}</span></div>`:`<div style="margin-left:auto"></div>`}
-          ${warn?`<span class="sag-warning">${esc(warn)}</span>`:stats.nu>0?`<span class="sag-ok">✓ SAG minimum met</span>`:''}
+          ${warn?`<span class="sag-warning">${esc(warn)}</span>`:(parseInt(state.show.sagMin)||0)>0&&stats.nu>0?`<span class="sag-ok">✓ SAG minimum met</span>`:''}
         </div>
       </div>
     </div>`;
@@ -901,7 +1061,73 @@ function renderBreakdown(){
     </div>
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
-    ${dayBlocks}`;
+    ${dayBlocks}
+    ${renderBoneyard()}`;
+}
+
+// Boneyard: scenes parked outside the schedule (omitted, stock, already shot).
+// Collapsed by default; drag targets so scenes can move in or out.
+let _boneyardExpanded=false;
+function toggleBoneyard(){_boneyardExpanded=!_boneyardExpanded;render();}
+function renderBoneyard(){
+  const items=state.boneyard||[];
+  // Render the boneyard whenever it exists OR has items (so the drop zone is
+  // always available once a schedule has been imported).
+  if(!items.length && !state.days.length) return '';
+  const scenesHTML=items.map(sc=>{
+    const roles=(sc.roles||[]);
+    const roleRows=roles.map(r=>{
+      const bTags=(r.bumps||[]).map(b=>`<span class="bump-tag">${esc(b.label||b.name||'')}</span>`).join('');
+      const tier=RATE_MAP[r.tier]||{label:r.tier};
+      return `<tr>
+        <td style="text-align:center;width:30px"><span class="edit-icon">✎</span></td>
+        <td><strong>${r.count||1}</strong></td>
+        <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
+        <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
+        <td style="color:var(--tfnt)">$${r.baseRate}/8</td>
+        <td style="color:var(--tfnt)">${r.hours}h</td>
+        <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
+        <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
+        <td></td>
+      </tr>`;
+    }).join('');
+    return `<div class="scene-block" draggable="true" data-scene-id="${sc.id}" data-day-id="__boneyard__">
+      <table class="roles-table">
+        <colgroup>
+          <col class="col-edit"><col class="col-count"><col class="col-type">
+          <col class="col-tier"><col class="col-rate"><col class="col-hours">
+          <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
+        </colgroup>
+        <tr class="scene-hdr-row">
+          <td class="shdr-main" colspan="7"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag back to a day">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set||'(no set)')}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
+          <td class="shdr-btns" colspan="2">
+            <button class="btn btn-danger btn-xs" onclick="deleteBoneyardScene('${sc.id}')" title="Remove from boneyard">✕</button>
+          </td>
+        </tr>
+        ${roles.length?`<tbody>${roleRows}</tbody>`:`<tr class="no-roles-row"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG</td></tr>`}
+      </table>
+    </div>`;
+  }).join('');
+  return `<div class="day-block boneyard-block" data-day-id="__boneyard__">
+    <div class="day-hdr boneyard-hdr" onclick="toggleBoneyard()" style="cursor:pointer">
+      <div class="day-hdr-left">
+        <span style="color:#fff;font-size:11px;width:16px">${_boneyardExpanded?'▼':'▶'}</span>
+        <span class="day-label">Boneyard</span>
+        <span class="day-date-str" style="opacity:0.7">omitted · stock · already shot</span>
+      </div>
+      <div class="day-stats">
+        <span class="day-stat"><strong>${items.length}</strong> scene${items.length===1?'':'s'}</span>
+      </div>
+    </div>
+    <div class="day-body ${_boneyardExpanded?'open':''}" data-boneyard-body="1">
+      ${items.length?scenesHTML:`<div class="empty" style="padding:14px;font-style:italic;color:var(--tmut)">Drop a scene here to archive it.</div>`}
+    </div>
+  </div>`;
+}
+function deleteBoneyardScene(sceneId){
+  if(!confirm('Permanently delete this scene from the boneyard?')) return;
+  state.boneyard=(state.boneyard||[]).filter(sc=>sc.id!==sceneId);
+  save(); render();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -928,12 +1154,12 @@ function renderExport(){
       rows.push(`<tr class="row-scene-hdr"><td colspan="6">${sc.sceneId?'Sc. '+esc(sc.sceneId)+' · ':''}${esc(sc.set)}${sc.desc?' — '+esc(sc.desc):''}</td></tr>`);
       (sc.roles||[]).forEach(r=>{
         const bStr=(r.bumps||[]).map(b=>b.label).join(', ')||'—';
-        const reuse=reuseInfo(r.type,sc.id);
+        const reuse=reuseDisplayInfo(r,day);
         rows.push(`<tr>
           <td><strong>${r.count||1}</strong>${r.minors?' <em>(minor)</em>':''}</td>
           <td>${esc(r.type)}</td><td>$${r.baseRate}/8</td><td>${r.hours}</td>
           <td style="font-size:11px">${esc(bStr)}</td>
-          <td style="font-size:11px">${esc(r.notes||'')}${reuse.length?` <em>[Reuse: Sc. ${esc(reuse[0])}${reuse.length>1?', '+esc(reuse.slice(1).join(', ')):''} ]</em>`:''}</td>
+          <td style="font-size:11px">${esc(r.notes||'')}${reuse?` <em>[${esc(reuse.label)}]</em>`:''}</td>
         </tr>`);
       });
     });
@@ -1248,6 +1474,34 @@ function openRoleModal(dayId,sceneId,roleId){
   const tierOpts=RATE_TIERS.map(t=>
     `<option value="${t.id}" ${(role?.tier||'sag')===t.id?'selected':''}>${t.label}</option>`).join('');
 
+  // Build "Reuse from" dropdown options: every other role in this day.
+  const otherRoles=[];
+  (day?.scenes||[]).forEach(s2=>(s2.roles||[]).forEach(r2=>{
+    if(r2.id===role?.id) return;
+    otherRoles.push({sc:s2,r:r2});
+  }));
+  // Determine default-selected role id:
+  //  • if role has saved reuseOf with a roleId → that id (count>0) OR '' for explicit None
+  //  • else if a same-name role exists on this day → preselect it (visual hint; count stays 0)
+  //  • else → '' (None)
+  let defaultReuseId='';
+  if(role&&role.reuseOf){
+    defaultReuseId=role.reuseOf.roleId||'';
+  } else if(role){
+    const myType=(role.type||'').trim().toLowerCase();
+    if(myType){
+      const sameName=otherRoles.find(({r})=>(r.type||'').trim().toLowerCase()===myType);
+      if(sameName) defaultReuseId=sameName.r.id;
+    }
+  }
+  const reuseOpts=otherRoles.map(({sc:s2,r:r2})=>{
+    const ref=s2.sceneId?'Sc. '+esc(s2.sceneId):'Day '+day.dayNumber;
+    const sel=r2.id===defaultReuseId?' selected':'';
+    return `<option value="${esc(r2.id)}" data-parent-count="${r2.count||1}"${sel}>${ref}: ${r2.count||1} ${esc(r2.type||'(no name)')}</option>`;
+  }).join('');
+  const reuseSavedCount=role&&role.reuseOf?(parseInt(role.reuseOf.count)||0):0;
+  const reuseRowVisible=!!defaultReuseId;
+
   openModal(`
     <div class="modal-title">${role?'Edit':'Add'} Role
       ${role?`<div style="display:flex;gap:8px"><button class="btn btn-danger btn-sm" onclick="deleteRole('${dayId}','${sceneId}','${roleId}');closeModal()">Delete</button><button class="btn btn-ghost" onclick="closeModal()">✕</button></div>`
@@ -1285,6 +1539,21 @@ function openRoleModal(dayId,sceneId,roleId){
     <hr class="divider">
     <div class="fg g2" style="margin-bottom:14px">
       <div class="form-group">
+        <label class="lbl">Reuse from</label>
+        <select class="sel" id="r-reuse-from" data-default="${esc(defaultReuseId)}" onchange="onReuseFromChange()">
+          <option value=""${defaultReuseId?'':' selected'}>— None (new group) —</option>
+          ${reuseOpts}
+        </select>
+      </div>
+      <div class="form-group" id="r-reuse-count-wrap" style="${reuseRowVisible?'':'display:none'}">
+        <label class="lbl">How many reused</label>
+        <input class="inp" id="r-reuse-count" type="number" min="0" value="${reuseSavedCount}">
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="fg g2" style="margin-bottom:14px">
+      <div class="form-group">
         <label class="lbl">Notes</label>
         <input class="inp" id="r-notes" value="${esc(role?.notes||'')}" placeholder="">
       </div>
@@ -1306,6 +1575,25 @@ function openRoleModal(dayId,sceneId,roleId){
 function onTierChange(val){
   const t=RATE_MAP[val];if(t&&t.def>0)document.getElementById('r-rate').value=t.def;
   updatePay();
+}
+
+function onReuseFromChange(){
+  const sel=document.getElementById('r-reuse-from');
+  const wrap=document.getElementById('r-reuse-count-wrap');
+  const cnt=document.getElementById('r-reuse-count');
+  if(!sel||!wrap||!cnt) return;
+  if(sel.value){
+    wrap.style.display='';
+    // If user just picked a role and count is still 0, suggest a sensible default
+    if((parseInt(cnt.value)||0)===0){
+      const opt=sel.options[sel.selectedIndex];
+      const parentCount=parseInt(opt?.dataset?.parentCount)||1;
+      const thisCount=parseInt(document.getElementById('r-count')?.value)||1;
+      cnt.value=Math.min(thisCount,parentCount);
+    }
+  } else {
+    wrap.style.display='none';
+  }
 }
 
 function updatePay(){
@@ -1370,11 +1658,137 @@ function saveRole(dayId,sceneId,roleId){
     notes:document.getElementById('r-notes').value.trim(),
     minors:document.getElementById('r-minors').checked
   };
+  // Persist reuseOf:
+  //  • specific role + count>0      → {roleId, count}  (explicit reuse)
+  //  • "None" picked, changed from default → {roleId:'', count:0}  (explicit None)
+  //  • default unchanged and count=0       → omit (auto-fallback applies)
+  const rfEl=document.getElementById('r-reuse-from');
+  const rcEl=document.getElementById('r-reuse-count');
+  if(rfEl){
+    const rfVal=rfEl.value;
+    const rfDefault=rfEl.dataset.default||'';
+    const rcVal=parseInt(rcEl?.value)||0;
+    if(rfVal&&rcVal>0){
+      role.reuseOf={roleId:rfVal,count:rcVal};
+    } else if(!rfVal && rfDefault){
+      // User changed the dropdown from a same-name suggestion to "None" — explicit opt-out
+      role.reuseOf={roleId:'',count:0};
+    }
+    // else: leave role.reuseOf undefined — auto-by-name fallback governs
+  }
+
+  // Look up peers (other roles whose type matches this one BEFORE the edit).
+  // Only on edit — for new roles there's no prior state to spread from.
   const day=state.days.find(d=>d.id===dayId);
-  const sc=day?.scenes.find(s=>s.id===sceneId);if(!sc)return;
-  sc.roles=(sc.roles||[]).filter(r=>r.id!==role.id);
-  sc.roles.push(role);
-  save();closeModal();render();
+  if(!day) return;
+  const sc=day.scenes.find(s=>s.id===sceneId);
+  if(!sc) return;
+  let originalType=null;
+  if(roleId){
+    const orig=(sc.roles||[]).find(r=>r.id===roleId);
+    originalType=(orig?.type||'').trim().toLowerCase();
+  }
+  const peers={today:[],otherDays:[]};
+  if(originalType){
+    (day.scenes||[]).forEach(s=>{
+      (s.roles||[]).forEach(r=>{
+        if(r.id===roleId) return;
+        if((r.type||'').trim().toLowerCase()===originalType){
+          peers.today.push({day,scene:s,role:r});
+        }
+      });
+    });
+    state.days.forEach(d=>{
+      if(d.id===dayId) return;
+      (d.scenes||[]).forEach(s=>{
+        (s.roles||[]).forEach(r=>{
+          if((r.type||'').trim().toLowerCase()===originalType){
+            peers.otherDays.push({day:d,scene:s,role:r});
+          }
+        });
+      });
+    });
+  }
+
+  // If no peers, save and exit immediately.
+  if(!peers.today.length && !peers.otherDays.length){
+    _applyRoleSave(sc, role, []);
+    return;
+  }
+
+  // Otherwise ask which scope to apply to.
+  _promptPropagation(sc, role, originalType, peers);
+}
+
+// Replace the role in-place on its scene, then apply the same field changes
+// to peers (keeping each peer's id and reuseOf). Closes the modal + saves.
+function _applyRoleSave(sc, newRole, peerList){
+  sc.roles=(sc.roles||[]).filter(r=>r.id!==newRole.id);
+  sc.roles.push(newRole);
+  // Apply propagatable fields. We intentionally skip id and reuseOf
+  // (those are per-instance), but type/count/tier/rate/hours/bumps/notes/
+  // minors all carry over.
+  peerList.forEach(({role:peerRole})=>{
+    peerRole.type=newRole.type;
+    peerRole.count=newRole.count;
+    peerRole.tier=newRole.tier;
+    peerRole.baseRate=newRole.baseRate;
+    peerRole.hours=newRole.hours;
+    peerRole.bumps=JSON.parse(JSON.stringify(newRole.bumps||[]));
+    peerRole.notes=newRole.notes;
+    peerRole.minors=newRole.minors;
+  });
+  save(); closeModal(); render();
+  if(peerList.length){
+    showToast(`Applied to ${peerList.length+1} role${peerList.length?'s':''}`);
+  }
+}
+
+function _promptPropagation(sc, newRole, originalType, peers){
+  const todayN=peers.today.length;
+  const otherN=peers.otherDays.length;
+  const totalN=todayN+otherN;
+  const label=esc(originalType||newRole.type);
+  // Stash the data on window so the inline onclicks can read it without
+  // serializing arrays into the HTML. Cleared by closeModal via reset on render.
+  window._propagationCtx={sc,newRole,peers};
+  openModal(`
+    <div class="modal-title">Apply to other "${label}" groups?
+      <button class="btn btn-ghost" onclick="_propagationCancel()">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:14px">
+      This group appears in <strong>${todayN}</strong> other scene${todayN===1?'':'s'} today
+      and <strong>${otherN}</strong> on other days. Where do you want this edit applied?
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-secondary" style="text-align:left" onclick="_propagationApply('this')">
+        <strong>Just this scene</strong>
+        <div style="font-size:11px;color:var(--tmut);margin-top:2px">Leave other scenes unchanged.</div>
+      </button>
+      <button class="btn btn-secondary" style="text-align:left" onclick="_propagationApply('today')" ${todayN===0?'disabled style="opacity:0.4;text-align:left"':''}>
+        <strong>All scenes today (${todayN} other${todayN===1?'':'s'})</strong>
+        <div style="font-size:11px;color:var(--tmut);margin-top:2px">Update every "${label}" group on Day ${peers.today[0]?.day.dayNumber ?? sc.dayNumber ?? ''}.</div>
+      </button>
+      <button class="btn btn-primary" style="text-align:left" onclick="_propagationApply('all')" ${totalN===0?'disabled style="opacity:0.4;text-align:left"':''}>
+        <strong>All across the schedule (${totalN} other${totalN===1?'':'s'})</strong>
+        <div style="font-size:11px;color:rgba(255,255,255,0.75);margin-top:2px">Update every "${label}" group everywhere.</div>
+      </button>
+    </div>
+  `);
+}
+
+function _propagationApply(scope){
+  const ctx=window._propagationCtx;
+  if(!ctx) return;
+  let peerList=[];
+  if(scope==='today') peerList=ctx.peers.today;
+  else if(scope==='all') peerList=ctx.peers.today.concat(ctx.peers.otherDays);
+  _applyRoleSave(ctx.sc, ctx.newRole, peerList);
+  delete window._propagationCtx;
+}
+function _propagationCancel(){
+  delete window._propagationCtx;
+  closeModal();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1457,6 +1871,34 @@ function _saveLabel(){
   return parts.join(' · ')||'Untitled';
 }
 
+// "Has substantive content" — board worth auto-saving before switching.
+// Empty state (no days, no scenes, no roster, default show name) is skipped.
+function _hasSubstance(){
+  const days=state.days||[];
+  if(days.some(d=>(d.scenes||[]).length>0 || (d.scenes||[]).some(sc=>(sc.roles||[]).length>0))) return true;
+  if((state.standins||[]).length>0) return true;
+  if(((state.boneyard)||[]).length>0) return true;
+  if((state.show.name||'').trim() || (state.show.episode||'').trim()) return true;
+  return false;
+}
+
+// Persist the current board to /saves under its current name (or a derived
+// label). Used before switching to a different breakdown so nothing is lost.
+// Resolves with the save id (existing or new), or null if there was nothing
+// worth saving / the server is unreachable.
+async function _autoSaveCurrent(){
+  if(!_hasSubstance()) return null;
+  const id=_saveId||Math.random().toString(36).slice(2,10);
+  const name=_saveName||_saveLabel();
+  const body={id, name, savedAt:_nowISO(), state};
+  try{
+    const res=await fetch('/saves',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(j.ok){ _saveId=id; _saveName=name; return id; }
+  }catch(e){}
+  return null;
+}
+
 // ── Save As ──────────────────────────────────────────────
 function openSaveAs(){
   const suggested=_saveName||_saveLabel();
@@ -1523,10 +1965,12 @@ function _renderSavesPanel(saves){
       </div>`;
     }).join('');
 
+  const currentLabel=_saveName?` (current: ${esc(_saveName)})`:_hasSubstance()?' (current: unsaved)':'';
   const html=`
-    <div class="modal-title">📂 Saved Breakdowns</div>
-    <div style="margin-bottom:14px">
-      <button class="btn btn-primary btn-sm" onclick="closeModal();openSaveAs()">💾 Save Current As…</button>
+    <div class="modal-title">📂 Projects${currentLabel}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" onclick="newEpisode()" title="Start a fresh blank breakdown. Current board is saved first.">+ New Episode</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal();openSaveAs()">💾 Save Current As…</button>
     </div>
     <div class="saves-list">${rows}</div>
     <div style="text-align:right;margin-top:14px">
@@ -1536,7 +1980,25 @@ function _renderSavesPanel(saves){
   if(box) box.innerHTML=html;
 }
 
+// Save current (if it has substance), then wipe to a blank board and drop the
+// user on Setup so they can fill in show info for the new episode.
+async function newEpisode(){
+  const savedId=await _autoSaveCurrent();
+  state=defaultState();
+  _saveId=null; _saveName=null;
+  expandedDays={};
+  save(); closeModal();
+  currentTab='setup'; render(); updateNavInfo();
+  showToast(savedId?'Current saved · started new episode':'Started new episode');
+}
+
 async function loadSave(id){
+  // If the current board has unsaved-ish content, persist it first so the
+  // switch is non-destructive. _autoSaveCurrent is a no-op for empty boards
+  // and silently fails closed if the server is unreachable.
+  if(id !== _saveId){
+    await _autoSaveCurrent();
+  }
   try{
     const res=await fetch(`/saves/${id}`);
     const j=await res.json();
@@ -1546,6 +2008,7 @@ async function loadSave(id){
     _saveName=j.state._saveName||'';
     // Migrate
     if(!state.show.isSeries) state.show.isSeries=false;
+    if(!Array.isArray(state.boneyard)) state.boneyard=[];
     save(); expandedDays={}; closeModal(); render(); updateNavInfo();
     showToast(`Loaded: ${_saveName}`);
   }catch(e){ showToast('Load failed — is the server running?','error'); }
@@ -1660,11 +2123,17 @@ async function checkPdfServer(){
 function updatePdfBtn(){
   const btn=document.getElementById('pdf-import-btn');
   if(!btn)return;
+  const label=document.getElementById('pdf-import-label');
+  btn.style.opacity='';
   if(_pdfServerAvailable===false){
-    btn.style.opacity='0.45';
-    btn.title='PDF import requires the server.\nRun: python3 bgboard_server.py';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-secondary');
+    if(label) label.textContent='↓ Import PDF (server offline)';
+    btn.title='PDF import requires the local server.\nRun: python3 bgboard_server.py';
   } else {
-    btn.style.opacity='1';
+    btn.classList.remove('btn-secondary');
+    btn.classList.add('btn-primary');
+    if(label) label.textContent='↓ Import PDF';
     btn.title='Import a Movie Magic Scheduling PDF shootsked';
   }
 }
@@ -1673,26 +2142,98 @@ function updatePdfBtn(){
 // DIFF-MERGE
 // ══════════════════════════════════════════════════════════
 
+// Quality preview shown after a fresh PDF parse, BEFORE committing the import.
+// Surfaces signals (sets %, scene count, format-family) so the user can spot
+// a bad parse without having to commit and then discard.
+function showImportPreviewModal(s){
+  const dayCount=s.days?.length||0;
+  const sceneCount=(s.days||[]).reduce((n,d)=>n+(d.scenes?.length||0),0);
+  const roleCount=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).reduce((m,sc)=>m+(sc.roles?.length||0),0),0);
+  const withSet=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).filter(sc=>sc.set && sc.set!=='Unknown Set').length,0);
+  const setsPct=sceneCount?Math.round(withSet/sceneCount*100):0;
+  const format=(s.metadata&&s.metadata.format)||'unknown';
+  const formatUnknown=format.endsWith(':unknown')||format==='unknown';
+
+  const warnings=[];
+  if(sceneCount<5) warnings.push(`Only ${sceneCount} scenes detected — most schedules have many more. Parser may have missed the bulk of the document.`);
+  if(sceneCount>0 && setsPct<50) warnings.push(`${setsPct}% of scenes have a real set name (${withSet}/${sceneCount}). The rest show "Unknown Set" — usually means the scene-header format wasn't recognized.`);
+  if(formatUnknown) warnings.push(`Format family detected as "${format}". Parser is running without format-specific hints — quality may be lower.`);
+
+  const sev=warnings.length>=2?'red':(warnings.length===1?'yellow':'green');
+  const sevColor={red:'#e63946',yellow:'#e9c46a',green:'#52b788'}[sev];
+  const sevLabel={red:'⚠ Parse looks suspect',yellow:'⚠ Review before committing',green:'✓ Parse looks healthy'}[sev];
+
+  const showLine=(s.show&&s.show.name)?esc(s.show.name)+(s.show.episode?' · Ep '+esc(s.show.episode):''):'(no show name detected)';
+
+  openModal(`
+    <div class="modal-title">Review import
+      <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:6px">${showLine}</div>
+    <div style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:${sevColor};color:#fff;margin-bottom:14px">${sevLabel}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg-el);padding:10px;border-radius:4px;text-align:center">
+        <div style="font-size:22px;font-weight:800">${dayCount}</div>
+        <div style="font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.06em">Days</div>
+      </div>
+      <div style="background:var(--bg-el);padding:10px;border-radius:4px;text-align:center">
+        <div style="font-size:22px;font-weight:800">${sceneCount}</div>
+        <div style="font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.06em">Scenes</div>
+      </div>
+      <div style="background:var(--bg-el);padding:10px;border-radius:4px;text-align:center">
+        <div style="font-size:22px;font-weight:800">${roleCount}</div>
+        <div style="font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.06em">BG roles</div>
+      </div>
+      <div style="background:var(--bg-el);padding:10px;border-radius:4px;text-align:center">
+        <div style="font-size:22px;font-weight:800">${setsPct}%</div>
+        <div style="font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.06em">with set</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--tmut);margin-bottom:14px">Format detected: <code>${esc(format)}</code></div>
+    ${warnings.length?`<div style="border-left:3px solid ${sevColor};padding:8px 12px;background:var(--bg-el);border-radius:0 4px 4px 0;margin-bottom:14px">
+      ${warnings.map(w=>`<div style="font-size:12px;color:var(--t2);margin-bottom:4px">• ${esc(w)}</div>`).join('')}
+    </div>`:''}
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="_confirmImport()">${sev==='red'?'Import anyway':'Import'}</button>
+    </div>
+  `);
+  window._pendingImport=s;
+}
+function _confirmImport(){
+  const s=window._pendingImport;
+  if(!s) return;
+  delete window._pendingImport;
+  closeModal();
+  _applyFreshImport(s);
+}
+
 function _applyFreshImport(s){
   // Carry over user-configured show fields (contract type, default rates, role,
   // etc.) — the parser ships factory defaults that should not overwrite anything
   // the user has already set up on the Setup tab.
   const prev=state.show||{};
   const merged={...s.show};
-  ['contractType','sagMin','defaultRates','preparedBy','role','isSeries','showCost'].forEach(k=>{
+  // Preserve fields the user already filled in on Setup. Name and Episode
+  // are intentionally included — the PDF parser often returns generic or
+  // empty values for these, and overwriting wipes typed-in show info.
+  ['name','episode','contractType','sagMin','defaultRates','preparedBy','role','isSeries','showCost'].forEach(k=>{
     if(prev[k]!==undefined && prev[k]!==null && prev[k]!=='') merged[k]=prev[k];
   });
   if(!merged.defaultRates) merged.defaultRates={...DEFAULT_RATES_FACTORY};
   state=s; state.show=merged;
   if(state.show.isSeries===undefined) state.show.isSeries=false;
+  if(!Array.isArray(state.boneyard)) state.boneyard=[];
   // Re-tier and re-rate imported roles to match the show's contract settings.
   const defaultTier=merged.contractType==='nonunion'?'nonunion':'sag';
   const dr=merged.defaultRates||{};
-  (state.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(r=>{
+  const reTier=(r)=>{
     r.tier=defaultTier;
     const rate=dr[defaultTier];
     if(rate!==undefined&&rate!==null) r.baseRate=rate;
-  })));
+  };
+  (state.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>(sc.roles||[]).forEach(reTier)));
+  (state.boneyard||[]).forEach(sc=>(sc.roles||[]).forEach(reTier));
   _saveId=null; _saveName=null;
   save(); currentTab='breakdown'; render(); updateNavInfo();
   showToast(`Imported: ${s.days.length} days`);
@@ -1972,13 +2513,10 @@ async function importPDF(e){
     const roleCount=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).reduce((m,sc)=>m+(sc.roles?.length||0),0),0);
 
     if(state.days.length===0){
-      // Fresh import — no existing data, just confirm and apply
-      if(!confirm(
-        `Import schedule?\n\n`+
-        `${s.show?.name||'?'}${s.show?.episode?' · Ep '+s.show.episode:''}\n`+
-        `${dayCount} shooting days · ${sceneCount} scenes · ${roleCount} BG roles`
-      )) return;
-      _applyFreshImport(s);
+      // Fresh import — show quality preview so the user can spot bad parses
+      // before committing. Existing breakdowns still go through the diff
+      // flow which has its own review step.
+      showImportPreviewModal(s);
     } else {
       // Existing breakdown — run diff, let user review
       showDiffModal(computeDiff(state, s), s);
@@ -1995,8 +2533,37 @@ async function importPDF(e){
 setTimeout(checkPdfServer, 800);
 
 function resetAll(){
-  if(!confirm('Clear all data and start over?'))return;
-  state=defaultState();expandedDays={};save();currentTab='setup';render();
+  const savedHint=_saveName
+    ? `\n\nThis won't delete the saved project "${_saveName}" — that copy is on disk.`
+    : (_hasSubstance()
+        ? `\n\nThis board is NOT saved. To keep it, click Cancel and use 📂 Projects → "New Episode" instead (auto-saves first).`
+        : '');
+  if(!confirm('Discard the current in-progress board?'+savedHint))return;
+  state=defaultState();_saveId=null;_saveName=null;expandedDays={};
+  // Visually clear the current view BEFORE rendering the new one. This
+  // gives the user immediate feedback that Discard took effect, even on
+  // the same tab they were viewing. Without this, the prior breakdown
+  // HTML stayed visible until the user manually switched tabs.
+  const main=document.getElementById('main');
+  if(main) main.innerHTML='';
+  if(typeof closeModal==='function') closeModal();
+  currentTab='setup';
+  save();
+  render();
+}
+
+// Create a single empty Day 1 and switch to Breakdown so the user has a
+// scaffold to work in without needing to import a PDF first. Preserves any
+// show info they typed in Setup.
+function startBlankBreakdown(){
+  if(!Array.isArray(state.days)) state.days=[];
+  if(state.days.length===0){
+    state.days.push({
+      id:uid(), dayNumber:1, date:'',
+      scenes:[], standinOff:{}, standinHours:{}
+    });
+  }
+  save(); currentTab='breakdown'; render(); updateNavInfo();
 }
 
 // ══════════════════════════════════════════════════════════

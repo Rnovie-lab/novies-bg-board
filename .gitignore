@@ -6,6 +6,8 @@
 
 # Keep requirements and config
 !requirements.txt
+!railway.json
+!package.json
 
 # macOS
 .DS_Store

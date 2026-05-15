@@ -46,6 +46,9 @@ class ParsedScene:
     art_department: List[str] = None
     misc: List[str] = None
     grip: List[str] = None
+    lighting: List[str] = None
+    sound: List[str] = None
+    episodic_cast: List[str] = None
 
     def __post_init__(self):
         for attr in (
@@ -53,6 +56,7 @@ class ParsedScene:
             'animals', 'set_dressing', 'additional_labor', 'visual_effects',
             'stunts', 'weapons', 'special_equipment', 'notes_section',
             'camera', 'makeup', 'art_department', 'misc', 'grip',
+            'lighting', 'sound', 'episodic_cast',
         ):
             if getattr(self, attr) is None:
                 setattr(self, attr, [])
@@ -446,14 +450,19 @@ class ColumnAwareScheduleParser:
     # an alias list: multi-word aliases must come first so they win greedy match.
     LABEL_VOCAB = {
         'cast': ['Cast Members', 'Cast'],
-        'background_actors': ['Background Actors', 'Background', 'Extras', 'BG'],
+        # Episodic Cast (Movie Magic old-desktop): lists cast members tagged
+        # by episode. Recognized as a non-BG label so its content (e.g.
+        # "gd2.3.Santi") doesn't bleed into background_actors.
+        'episodic_cast': ['Episodic Cast'],
+        'background_actors': ['Featured Background Actors', 'Background Actors',
+                               'Featured Background', 'Background', 'Extras', 'BG'],
         'props': ['Props'],
         'wardrobe': ['Wardrobe', 'Costumes'],
         'vehicles': ['Vehicles', 'Picture Cars'],
         'animals': ['Animals'],
         'set_dressing': ['Set Dressing', 'Greens'],
         'additional_labor': ['Additional Labor', "Add'l Labor"],
-        'visual_effects': ['Visual Effects', 'VFX', 'SPFX'],
+        'visual_effects': ['Visual Effects', 'VFX', 'SPFX', 'Special Effects'],
         'stunts': ['Stunts'],
         'weapons': ['Weapons'],
         'special_equipment': ['Special Equipment'],
@@ -463,6 +472,11 @@ class ColumnAwareScheduleParser:
         'art_department': ['Art Department'],
         'misc': ['Miscellaneous'],
         'grip': ['Grip'],
+        # Lighting / electric / sound — sometimes appear as Shamel sub-headers
+        # next to Additional Labor; absent from vocab they break header
+        # detection and surrounding content gets routed to neighbouring columns.
+        'lighting': ['Lighting', 'Electric'],
+        'sound': ['Sound'],
     }
     # Tokens that appear inside header rows as structural noise — not labels
     # themselves, but should not disqualify the row from being a header.
@@ -513,40 +527,102 @@ class ColumnAwareScheduleParser:
 
     def parse(self) -> Dict:
         scenes: List[ParsedScene] = []
-        # Map (page_idx, line_top) -> shooting day, derived from 'End of Day N' /
-        # 'Shoot Day # N' markers. We carry these into per-scene shooting_day.
-        day_markers: List[tuple] = []  # [(page_idx, top, day_num), ...]
         with pdfplumber.open(self.pdf_path) as pdf:
             # Format-family detection from footer text on first few pages.
             self.format_family = self._detect_format_family(pdf)
             show_title = self._extract_show_title(pdf)
 
+            # First pass: determine the FINAL "End of Day N" marker across the
+            # whole document. Anything assigned to a day > final_day is treated
+            # as boneyard (omitted strips, stock footage, etc.) — not a real
+            # shoot day.
+            final_day: Optional[int] = None
+            for page in pdf.pages:
+                pt = page.extract_text() or ''
+                for m in re.finditer(r'End\s+(?:of\s+)?Day\s+#?\s*(\d+)', pt, flags=re.IGNORECASE):
+                    d = int(m.group(1))
+                    if final_day is None or d > final_day:
+                        final_day = d
+
             current_day = 1
             for page_idx, page in enumerate(pdf.pages):
-                # Sniff "Shoot Day # N" header before parsing the page's scenes —
-                # it sets the current day for ALL scenes on this page.
                 page_text = page.extract_text() or ''
+                # "Shoot Day # N" header (Movie Magic): sets current day for the
+                # whole page. Position-independent.
                 shoot_day_match = re.search(r'Shoot\s+Day\s+#?\s*(\d+)', page_text, flags=re.IGNORECASE)
                 if shoot_day_match:
                     current_day = int(shoot_day_match.group(1))
 
+                # Find "End of Day N" markers and their string positions on this
+                # page. extract_text returns top-to-bottom order, so a string
+                # position serves as a proxy for visual y. A scene whose
+                # marker-text-position is AFTER an "End of Day N" position
+                # belongs to day N+1, not the previous day. This handles the
+                # case where the day-break sits at the TOP of a page (Shamel
+                # quirk seen in BTB) — the old logic assigned those scenes to
+                # the previous day because the marker was processed AFTER scene
+                # extraction.
+                page_day_breaks = [
+                    (m.start(), int(m.group(1)))
+                    for m in re.finditer(r'End\s+of\s+Day\s+(\d+)', page_text, flags=re.IGNORECASE)
+                ]
+
+                # Find scene marker positions in page_text by scene_id. Matches
+                # the same patterns _find_scene_markers uses (Shamel, Movie
+                # Magic). First occurrence per scene_id wins.
+                _sid = r'(\d+(?:\.\d+)?[A-Za-z]*)'
+                scene_text_pos: Dict[str, int] = {}
+                for m in re.finditer(
+                    r'(?:INT|EXT|INT/EXT|I/E)\.?\s+Scene\s+' + _sid + r'\b'
+                    r'|(?:^|\n)\s*-?\s*Scene\s*#?:?\s*' + _sid + r'\b'
+                    r'|\bSc\.?\s+' + _sid + r'\b',
+                    page_text, flags=re.IGNORECASE
+                ):
+                    sid = m.group(1) or m.group(2) or m.group(3)
+                    if sid and sid not in scene_text_pos:
+                        scene_text_pos[sid] = m.start()
+
                 page_scenes = self._parse_page(page, page_idx)
                 for s in page_scenes:
-                    if s.shooting_day is None:
-                        s.shooting_day = current_day
+                    if s.shooting_day is not None:
+                        continue
+                    spos = scene_text_pos.get(s.scene_id)
+                    # Default to current_day (matches prior behavior).
+                    day = current_day
+                    if spos is not None and page_day_breaks:
+                        # Pick the day implied by the LATEST break above this scene.
+                        for brk_pos, brk_day in page_day_breaks:
+                            if spos > brk_pos:
+                                day = brk_day + 1
+                    s.shooting_day = day
                 scenes.extend(page_scenes)
 
-                # "End of Day N" advances current_day for subsequent pages.
-                end_of_day_match = re.search(r'End\s+of\s+Day\s+(\d+)', page_text, flags=re.IGNORECASE)
-                if end_of_day_match:
-                    current_day = int(end_of_day_match.group(1)) + 1
+                # Carry the latest end-of-day marker forward to subsequent pages.
+                if page_day_breaks:
+                    last_day = max(d for _, d in page_day_breaks)
+                    current_day = last_day + 1
+
+        # Split into in-schedule scenes and boneyard. A scene is boneyard if it
+        # falls past the final "End of Day N" marker. If no end-of-day markers
+        # exist (e.g. Movie Magic with no end markers), final_day is None and
+        # all scenes stay in-schedule.
+        boneyard: List[ParsedScene] = []
+        in_schedule: List[ParsedScene] = []
+        for s in scenes:
+            if final_day is not None and s.shooting_day is not None and s.shooting_day > final_day:
+                boneyard.append(s)
+            else:
+                in_schedule.append(s)
 
         return {
-            'scenes': [asdict(s) for s in scenes],
+            'scenes': [asdict(s) for s in in_schedule],
+            'boneyard': [asdict(s) for s in boneyard],
             'metadata': {
                 'show_title': show_title,
                 'format': f'column-aware:{self.format_family}',
-                'total_scenes': len(scenes),
+                'total_scenes': len(in_schedule),
+                'boneyard_count': len(boneyard),
+                'final_day': final_day,
                 'columns_detected': self._any_columns_found,
                 'warnings': self.warnings,
             },
@@ -791,8 +867,15 @@ class ColumnAwareScheduleParser:
 
         result: Dict[str, List[Dict]] = {canon: [] for _, _, canon in ranges}
         for w in line['words']:
+            # Route by word CENTER, not x0. The leftmost-edge approach
+            # mis-routes words that happen to begin a hair before a column
+            # boundary — e.g. BTB Sc 20 "piece" has x0=245.7 vs a BG/Props
+            # boundary at 245.85, putting "piece of scrap plywood" into BG
+            # instead of Props. Center routing places each word on the side
+            # where its bulk visually sits.
+            wx = (w['x0'] + w['x1']) / 2.0
             for x_min, x_max, canon in ranges:
-                if x_min <= w['x0'] < x_max:
+                if x_min <= wx < x_max:
                     result[canon].append(w)
                     break
         return result
@@ -829,6 +912,9 @@ class ColumnAwareScheduleParser:
             'camera': 'camera',
             'makeup': 'makeup',
             'art_department': 'art_department',
+            'lighting': 'lighting',
+            'sound': 'sound',
+            'episodic_cast': 'episodic_cast',
         }
         for canon, field in flat_field_map.items():
             for entry, _top in column_rows.get(canon, []):
@@ -850,14 +936,27 @@ class ColumnAwareScheduleParser:
         return {'number': None, 'name': s}
 
     def _parse_bg_entry(self, entry: str) -> Optional[Dict]:
-        """Parse 'x2 Bikini Girls (20 Y.O.)' / '10 PARTY GUESTS' / '30 YEAR OLD MOM' / 'Fisherman'."""
+        """Parse 'x2 Bikini Girls (20 Y.O.)' / '10 PARTY GUESTS' / '30 YEAR OLD MOM' /
+        'Movers (4)' / 'Fifth Graders (25)' / 'Fisherman'."""
         s = entry.strip()
         if not s:
             return None
+        # Trailing (N) badge: Movie Magic old-desktop format puts the count in
+        # parentheses AFTER the role. E.g. "Movers (4)", "Fifth Graders (25)".
+        # Require pure digits inside the parens so descriptive parentheticals
+        # like "(20 Y.O.)" or "(K)" don't get treated as counts.
+        m = re.match(r'^(.+?)\s*\((\d+)\)\s*$', s)
+        if m:
+            cleaned = self._clean_bg_type(m.group(1).strip())
+            if cleaned is not None:
+                return {'count': int(m.group(2)), 'type': cleaned, 'notes': '', 'props': []}
         # Leading xN badge (definitely a count).
         m = re.match(r'^x\s*(\d+)\s+(.+)$', s, flags=re.IGNORECASE)
         if m:
-            return {'count': int(m.group(1)), 'type': m.group(2).strip(), 'notes': '', 'props': []}
+            cleaned = self._clean_bg_type(m.group(2).strip())
+            if cleaned is None:
+                return None
+            return {'count': int(m.group(1)), 'type': cleaned, 'notes': '', 'props': []}
         # Leading bare integer: count only if not followed by an age/year word.
         m = re.match(r'^(\d+)\s+(.+)$', s)
         if m:
@@ -865,14 +964,53 @@ class ColumnAwareScheduleParser:
             first_word = rest.split()[0].upper().rstrip('.,')
             if first_word in {'YEAR', 'YEARS', 'YR', 'YRS', 'Y.O.', 'Y/O', 'YO'}:
                 # "30 YEAR OLD MOM" — number is part of description.
-                return {'count': 1, 'type': s, 'notes': '', 'props': []}
-            return {'count': int(m.group(1)), 'type': rest, 'notes': '', 'props': []}
+                cleaned = self._clean_bg_type(s)
+                return {'count': 1, 'type': cleaned or s, 'notes': '', 'props': []} if cleaned else None
+            cleaned = self._clean_bg_type(rest)
+            if cleaned is None:
+                return None
+            return {'count': int(m.group(1)), 'type': cleaned, 'notes': '', 'props': []}
         # No leading count → only accept if the string looks like a real BG role,
         # not column bleed from adjacent sections (e.g. "Hair" from a "Makeup & Hair"
         # column header, or "dust" from "covered in wood dust" in the makeup column).
         if self._looks_like_column_bleed(s):
             return None
-        return {'count': 1, 'type': s, 'notes': '', 'props': []}
+        cleaned = self._clean_bg_type(s)
+        if cleaned is None:
+            return None
+        return {'count': 1, 'type': cleaned, 'notes': '', 'props': []}
+
+    # Annotation patterns that show up inside parentheses on Shamel schedules
+    # but are notes about reuse / casting, not part of the BG type itself.
+    _BG_ANNOTATION_KEYWORDS = ('reuse', 'see scene', 'same as', 'from before',
+                               'continued', 'cont.', 'cont\'d', 'continues')
+
+    def _clean_bg_type(self, t: str) -> Optional[str]:
+        """Strip annotation parentheticals and reject obvious prop-leak entries.
+
+        Returns the cleaned type, or None if the string should be dropped.
+        Keeps real descriptors like '(20 Y.O.)' or '(K)' for minors which
+        downstream code reads.
+        """
+        if not t:
+            return None
+        # Strip annotation-only parentheticals: "(reuse Drivers from before)",
+        # "(see scene 12)", etc. Keep descriptive ones like "(20 Y.O.)", "(K)".
+        def _drop_anno(match):
+            inner = match.group(1).lower()
+            if any(kw in inner for kw in self._BG_ANNOTATION_KEYWORDS):
+                return ' '
+            return match.group(0)
+        cleaned = re.sub(r'\(([^)]*)\)', _drop_anno, t)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        # Reject license-plate / prop-like entries that contain ":"
+        # (e.g. "plate: BG cars" — a license plate prop misrouted into BG).
+        if ':' in cleaned:
+            return None
+        # Reject empty or single-symbol residue after cleanup.
+        if len(cleaned) < 3 or not re.search(r'[A-Za-z]', cleaned):
+            return None
+        return cleaned
 
     def _looks_like_column_bleed(self, s: str) -> bool:
         """Reject single-token / non-BG-shaped strings that are almost certainly
@@ -907,12 +1045,24 @@ class ColumnAwareScheduleParser:
         """Find lines that mark a scene start.
 
         Patterns seen across formats:
-          - 'Scene N' or 'Scene # N' (Shamel standalone; Margo inline)
+          - 'Scene N' or 'Scene # N' or 'Scene #: N' (Shamel; Margo inline;
+            Movie Magic old desktop). Scene IDs may include dots and letters
+            (e.g. '98pt', '3.7pt', '4.1', '3.6PH').
           - 'Sc. N' or 'Sc N' (Movie Magic abbreviation)
           - 'INT/EXT LOCATION Stage N' header line (Movie Magic; comes BEFORE
             the 'Sc. N' line, so we prefer this when both exist for the same scene
             to get accurate block boundaries)
         """
+        # Scene ID grammar accepts: optional letter prefix, digits, optional
+        # .digits, optional letters. Examples: "12", "12A", "98pt", "3.7pt",
+        # "4.1", "3.6PH", "A15", "FB2".
+        # Multi-ID rows (Movie Magic old-desktop): the user opted to keep
+        # comma-separated IDs as ONE combined scene_id, so we greedily match
+        # "3.13, 14VO, 15VO" as a single ID. Single-ID rows fall through
+        # to the simple form because the comma part is optional.
+        _single = r'[A-Z]{0,2}\d+(?:\.\d+)?[A-Za-z]*'
+        scene_id_re = r'(' + _single + r'(?:\s*,\s*' + _single + r')*)'
+
         markers: List[Dict] = []
 
         def add_marker(line_idx: int, scene_id: str, int_ext: str):
@@ -930,22 +1080,27 @@ class ColumnAwareScheduleParser:
         for i, line in enumerate(lines):
             text = line['text']
 
-            # Pattern A: 'Scene N' or 'Scene # N'
-            m = re.search(r'\bScene\s*#?\s*(\d+[A-Za-z]*)\b', text)
+            # Pattern A: 'Scene N' or 'Scene # N' or 'Scene #: N'
+            m = re.search(r'\bScene\s*#?:?\s*' + scene_id_re + r'\b', text)
             if m:
                 scene_word_pos = text.lower().find('scene')
                 if len(text[:scene_word_pos].split()) <= 3:
                     int_ext = self._find_int_ext_in_nearby_lines(lines, i)
-                    add_marker(i, m.group(1), int_ext)
+                    # If the line immediately above is an INT/EXT scene header
+                    # (Movie Magic old-desktop pattern), extend the block start
+                    # backwards so metadata parsing sees the set/ToD info.
+                    block_idx = self._extend_block_to_intext_above(lines, i)
+                    add_marker(block_idx, m.group(1), int_ext)
 
             # Pattern B: 'Sc. N' or 'Sc N' (Movie Magic) — used as the
             # tagline beneath an INT/EXT header.
-            m = re.search(r'\bSc\.?\s*(\d+[A-Za-z]*)\b', text)
+            m = re.search(r'\bSc\.?\s*' + scene_id_re + r'\b', text)
             if m and 'scene' not in text.lower():
                 sc_pos = text.lower().find('sc')
                 if len(text[:sc_pos].split()) <= 2:
                     int_ext = self._find_int_ext_in_nearby_lines(lines, i)
-                    add_marker(i, m.group(1), int_ext)
+                    block_idx = self._extend_block_to_intext_above(lines, i)
+                    add_marker(block_idx, m.group(1), int_ext)
 
             # Pattern C: 'INT/EXT LOCATION ... Stage N' header line. We register
             # this so the block starts at the right place even when a 'Scene #'
@@ -957,8 +1112,8 @@ class ColumnAwareScheduleParser:
                 # Look ahead up to 3 lines for the scene number.
                 for j in range(i, min(i + 4, len(lines))):
                     look = lines[j]['text']
-                    sm = re.search(r'\bScene\s*#?\s*(\d+[A-Za-z]*)\b', look) or \
-                         re.search(r'\bSc\.?\s*(\d+[A-Za-z]*)\b', look)
+                    sm = re.search(r'\bScene\s*#?:?\s*' + scene_id_re + r'\b', look) or \
+                         re.search(r'\bSc\.?\s*' + scene_id_re + r'\b', look)
                     if sm:
                         add_marker(i, sm.group(1), int_ext_match.group(1).rstrip('.'))
                         break
@@ -974,10 +1129,30 @@ class ColumnAwareScheduleParser:
                 return m.group(1).rstrip('.')
         return 'INT'
 
+    def _extend_block_to_intext_above(self, lines: List[Dict], scene_line_idx: int) -> int:
+        """If the line(s) immediately above the scene marker start with
+        INT/EXT (Movie Magic old-desktop pattern), return that earlier index
+        so the parser's metadata pass sees the inline scene header. Otherwise
+        return scene_line_idx unchanged.
+        """
+        for j in range(scene_line_idx - 1, max(-1, scene_line_idx - 3), -1):
+            if j < 0:
+                break
+            txt = lines[j]['text'].strip()
+            if re.match(r'^(INT/EXT|INT|EXT|I/E)\b', txt, flags=re.IGNORECASE):
+                return j
+            # Stop if we hit something that isn't likely a scene header
+            # continuation (e.g. blank, "Cast Members ...", "End of Day").
+            if txt:
+                break
+        return scene_line_idx
+
     def _fill_scene_metadata(self, scene: ParsedScene, metadata_lines: List[str], marker: Dict):
         joined = '\n'.join(metadata_lines)
-        # Set: SET NAME ...
-        m = re.search(r'Set:\s*(.+?)(?=\s+Time\s+of\s+Day:|\s+Duration:|\s+Script\s+Pages?:|\n|$)',
+        # ── Shamel / Movie Magic (new) labeled format: "Set: NAME", "Time of Day:" etc.
+        # Word boundary before "Set:" so we don't match "Sunset:" inside a day
+        # header line like "DAY 2 - FRI... Sunset: 8:04pm".
+        m = re.search(r'\bSet:\s*(.+?)(?=\s+Time\s+of\s+Day:|\s+Duration:|\s+Script\s+Pages?:|\n|$)',
                       joined, flags=re.IGNORECASE)
         if m:
             scene.set = m.group(1).strip()
@@ -991,6 +1166,100 @@ class ColumnAwareScheduleParser:
                       joined, flags=re.IGNORECASE)
         if m:
             scene.time_of_day = m.group(1).strip()
+
+        # ── Movie Magic old-desktop format: inline scene header on its own line
+        # "INT/EXT SET ToD ScriptDay [Pages] pgs [Unit]"
+        # Followed by: "Scene #: ID synopsis ..."
+        # Only fires if the labeled format above didn't fill these fields.
+        if not scene.set:
+            self._try_parse_mm_old_desktop_metadata(scene, metadata_lines)
+
+    # Time-of-day words seen in Movie Magic old-desktop format. Order/case
+    # matters less than exhaustiveness — anything not in this list will be
+    # absorbed into the set name, which is the wrong end of the boundary.
+    _MM_TOD_WORDS = (
+        'Day', 'Night', 'Morning', 'Morn', 'Dawn', 'Dusk', 'Evening',
+        'Afternoon', 'Continuous', 'Sunset', 'Sunrise', 'Magic Hour',
+        'Pre-Dawn', 'Pre-Dusk', 'Twilight', 'Midnight',
+    )
+
+    def _try_parse_mm_old_desktop_metadata(self, scene: ParsedScene, metadata_lines: List[str]):
+        """Parse Movie Magic old-desktop scene headers.
+
+        Two layout variants in the wild:
+
+        (1) Separate INT/EXT line ABOVE the Scene # line (RAMBLER):
+              EXT CRCC - First Tee Box Morn 15 3/8 pgs Wood Ranch
+              Scene #: 3.19pt Santi steps up to the first tee. THWACK!
+
+        (2) INLINE on the Scene # line itself (MM_B2, AA 201_202):
+              Scene # 606 INT The Shack - Basement Studio Day 7/8
+              Dr. Teeth cycles through several phases ...
+
+        Both: split into INT/EXT + SET + TIME_OF_DAY by locating a known ToD
+        word; everything between INT/EXT and the ToD is the set name. The
+        synopsis is the line immediately following the scene header.
+        """
+        # Find candidate header text — either a standalone INT/EXT line OR
+        # the inline portion of a "Scene # ID INT/EXT SET ToD ..." line.
+        header_text = None
+        scene_line = None
+        scene_line_idx = -1
+        for idx, ln in enumerate(metadata_lines):
+            stripped = ln.strip()
+            if header_text is None and re.match(r'^(INT/EXT|INT|EXT|I/E)\b', stripped, re.IGNORECASE):
+                # Variant (1): standalone INT/EXT line
+                header_text = stripped
+            elif scene_line is None and re.match(r'^Scene\s*#', stripped, re.IGNORECASE):
+                scene_line = stripped
+                scene_line_idx = idx
+                # Variant (2): inline. Strip the "Scene # ID" prefix and treat
+                # the remainder as if it were a standalone INT/EXT line.
+                if header_text is None:
+                    inline = re.match(
+                        r'^Scene\s*#?:?\s*\S+\s+(?P<rest>(?:INT/EXT|INT|EXT|I/E)\b.*)$',
+                        stripped, flags=re.IGNORECASE
+                    )
+                    if inline:
+                        header_text = inline.group('rest')
+
+        if not header_text:
+            return
+
+        # Locate the ToD word in the header. Longest matches first so
+        # "Magic Hour" wins over "Hour" if either were in the vocab.
+        tod_re = '|'.join(sorted((re.escape(w) for w in self._MM_TOD_WORDS),
+                                 key=len, reverse=True))
+        m = re.search(r'^(?P<ie>INT/EXT|INT|EXT|I/E)\b\.?\s+(?P<set>.+?)\s+(?P<tod>'
+                      + tod_re + r')\b', header_text, flags=re.IGNORECASE)
+        if not m:
+            return
+        scene.int_ext = m.group('ie').upper().rstrip('.')
+        scene.set = m.group('set').strip()
+        scene.time_of_day = m.group('tod').strip()
+
+        # Synopsis: variant (1) puts it on the Scene #: line AFTER the ID.
+        # Variant (2) puts it on the NEXT line after the Scene # line.
+        if scene_line:
+            # Try synopsis-after-id (variant 1) first.
+            sm = re.search(
+                r'^Scene\s*#?:?\s*\S+\s+(?:INT/EXT|INT|EXT|I/E)\b.*?\d+(?:/\d+)?\s*$',
+                scene_line, flags=re.IGNORECASE
+            )
+            if sm is None:
+                # Variant 1 fallback: synopsis follows the ID directly (no inline IE).
+                sm2 = re.search(
+                    r'^Scene\s*#?:?\s*[\w.,/\s]+?\s+(?P<syn>[A-Z(].+)$',
+                    scene_line
+                )
+                if sm2:
+                    scene.synopsis = sm2.group('syn').strip()
+            # Variant 2: synopsis is the line right after the scene header.
+            if not scene.synopsis and scene_line_idx >= 0 and scene_line_idx + 1 < len(metadata_lines):
+                cand = metadata_lines[scene_line_idx + 1].strip()
+                # Don't grab the column-header continuation or noise.
+                if cand and not re.match(r'^(Cast|Background|Notes|Props|Wardrobe|End\s+Day|Shoot\s+Day|DAY\s+\d|Sunrise|STAGE|Printed)', cand, re.IGNORECASE):
+                    scene.synopsis = cand
 
     def _detect_format_family(self, pdf) -> str:
         """Quick sniff of vendor signature from first 2 pages of text."""
@@ -1057,6 +1326,8 @@ def parse_shooting_schedule(pdf_path: str, format_type: str = "auto") -> Dict:
         heuristic_result['metadata']['format'] = (
             f"heuristic-fallback ({heuristic_result['metadata'].get('format', 'auto-detected')})"
         )
+        heuristic_result.setdefault('boneyard', [])
         return heuristic_result
 
+    column_result.setdefault('boneyard', [])
     return column_result
