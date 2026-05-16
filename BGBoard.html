@@ -2151,8 +2151,11 @@ function showImportPreviewModal(s){
   const roleCount=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).reduce((m,sc)=>m+(sc.roles?.length||0),0),0);
   const withSet=(s.days||[]).reduce((n,d)=>n+(d.scenes||[]).filter(sc=>sc.set && sc.set!=='Unknown Set').length,0);
   const setsPct=sceneCount?Math.round(withSet/sceneCount*100):0;
-  const format=(s.metadata&&s.metadata.format)||'unknown';
-  const formatUnknown=format.endsWith(':unknown')||format==='unknown';
+  const formatRaw=(s.metadata&&s.metadata.format)||'unknown';
+  const formatFamily=(s.metadata&&s.metadata.format_family)||'unknown';
+  const formatDisplay=(s.metadata&&s.metadata.format_display_name)||formatRaw;
+  const format=formatDisplay;
+  const formatUnknown=formatFamily==='unknown'||formatRaw.endsWith(':unknown')||formatRaw==='unknown';
 
   const warnings=[];
   if(sceneCount<5) warnings.push(`Only ${sceneCount} scenes detected — most schedules have many more. Parser may have missed the bulk of the document.`);

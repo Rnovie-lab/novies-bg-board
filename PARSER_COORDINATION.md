@@ -464,3 +464,283 @@ Implemented `showImportPreviewModal()` triggered for fresh imports. Shows:
 - Cancel aborts the import without committing; Confirm runs `_applyFreshImport()`
 
 Phase 2 (mirror CSC's Schedule Cleaner) is **not yet built** pending alignment on the failure-log location.
+
+---
+
+## CSC corpus analysis — 2026-05-15 (192 schedules)
+
+Appended by Call Sheet Commander. Ross assembled a corpus of 192 unique
+shooting schedules from his Mac Mail archive (deduped from 269 hits using a
+manifest Codex generated). We ran the CSC parser against every file. Sharing
+the numbers, the failure modes, and what we learned about format families —
+useful for BG Board to validate against the same corpus or compare detection
+rates.
+
+Manifest + analysis CSVs live at:
+`/Users/SSDPro/.codex/worktrees/d613/Call Sheet Commander/exports/ross_novie_shooting_schedules/`
+
+If BG Board wants to run its own parser against the same set, point at
+`schedule_analysis_ready_manifest.csv` (canonical 193, with duplicates
+already pruned).
+
+### Headline numbers
+
+| Outcome | Count | Pct |
+|---|---:|---:|
+| Clean parse (scenes + cast) | 169 | 88% |
+| Soft warnings (parses but loses information) | 20 | 10% |
+| Hard failures (zero scenes) | 3 | 2% |
+
+### Format-detection breakdown (CSC parser)
+
+- **sdm** — 173 (90%)
+- **oneliner** — 14 (7%)
+- **legacy** — 5 (3%)
+- **shamel** — 0 — interesting since BG Board sees lots of Shamel. Worth
+  comparing notes: either this corpus has zero true Shamel files, or our
+  CSC format classifier never selects Shamel and routes Shamel-formatted
+  files through one of the other paths. The CSC format detection lives in
+  `schedule_parser_cs.py::detect_format` if anyone wants to cross-check.
+
+### Three hard failures — three different root causes
+
+**1. `403_ShootSked_Blue.pdf` — cast-list page in front**
+Page 1 is a cast-summary page (just `CAST MEMBERS` followed by `1.Amy 8.Sandra
+22.Cafe Customer ...`). Scenes presumably start on page 2. CSC parser bails
+when page 1 has no scene markers.
+
+**Fix (CSC plan):** if page 1 has >60% lines matching `^\d+\.[A-Z]` and no
+`Scene #` / `INT/EXT` markers, skip and try page 2. Question for BG Board:
+do you see this "cast roster as page 1" pattern in your corpus? If yes,
+a shared skip-heuristic would help both projects.
+
+**2. `CH7_Block1_BLUE_Shooting Schedule.pdf` — old Movie Magic inline format**
+Children's Hospital Season 7. Format intersperses LEFT-column data (cast
+members) with RIGHT-column data (props, VFX, grip) on the same y-row.
+This is the "independent left+right tracks" pattern already documented in
+this doc. **CSC cannot parse this today; BG Board's coordinate-aware
+parser should.** This file is a great regression fixture once the shared
+package lands — confirms the coordinate path works.
+
+**3. `Superstore 03020 BLUE Shooting Schedule 2.11.18.pdf` — breakdown
+sheet, not a schedule**
+This file isn't actually a shooting schedule. It's a **Movie Magic
+Breakdown Sheet** — one full page per scene with explicit `Breakdown
+Sheet` header, plus `Int/Ext`, `Script Page`, `Day/Night`, `Page Count`,
+`Scene Description`, `Settings`, `Location`, `Sequence` rows. Got mixed
+into the corpus because the filename says "Shooting Schedule" but the
+content is a breakdown.
+
+**Fix (CSC plan):** detect `Breakdown Sheet` header in page-1 text and
+reject with a content-type error similar to `image_only` / `crew_list`.
+BG Board likely benefits from the same guard.
+
+### Soft-warning patterns
+
+**A) `SINGLE_DAY_MANY_SCENES` (15 files)** — 30+ scenes assigned to day 1.
+Some are legitimately no-day-breakdown production-meeting / scene-order
+schedules. Others have day markers our regex doesn't catch. Crosschecking
+with Codex's `manifest_dayMarkers` count separates the legit ones from
+the parser bugs.
+
+**B) `LOW_CAST_INDEX_RATIO` (8 files)** — `cast_total / cast_index > 12`.
+Concentrated in the NH / NotHer family (3 of 4 files), suggesting a
+template characteristic where the same cast appears in many scenes with
+slight per-scene annotation differences that prevent index consolidation.
+The Solstice issue we discussed earlier in this doc fits this pattern.
+
+### Show families present in this corpus
+
+If BG Board wants to compare coverage, the headline cohorts here are:
+- Episode-numbered (1xx-6xx): ~88 files, mostly SDM, one or two
+  long-running shows
+- Superstore: 8 files split 4 SDM / 4 oneliner — same show but format
+  changed across seasons. Useful for testing format-detection stability.
+- GB2 (8 files), Block (13), Block 1-6 (13), BlockOne (3) — all SDM,
+  100% clean parses each. Strong baseline test fixtures.
+- NH / NotHer (4 files combined), CH7 (2 files), MovieMagic_B (7) —
+  format-edge cases per the soft warnings + hard failure above.
+- MovingOn, Napa, AmAuto, LHB, SS4/5/6, AA, AA2 — smaller cohorts each,
+  representative of different vendor templates.
+
+### Recommended representative test set (24 files)
+
+CSC built a 24-file rep-set that captures: every hard failure (as
+post-fix regression fixtures), the diverse soft-warning patterns, and
+one or two clean parses from each major show family. Listed in
+`CORPUS_ANALYSIS_2026-05-15.md` in the CSC repo. **Proposing this becomes
+the shared regression corpus** for both projects — same 24 files, same
+expected output shapes, easy to diff results.
+
+### Parser improvements ranked by ROI (CSC perspective)
+
+1. Cast-list-only page-1 skip → ~30 min work, unlocks 1+ files
+2. Breakdown Sheet content-type rejection → ~15 min, prevents user
+   confusion
+3. Day-marker regex tuning for soft-warning files → 1-2 hours, moves
+   5-10 files from soft to clean
+4. Adopt BG Board's coordinate parser when extracted → ~1 week
+   adoption work, unlocks CH7-style inline format (and presumably
+   AmAuto / GB2 mid-scene edge cases on the BG Board side too)
+5. NH-family low cast index investigation → 30 min, depends on
+   findings
+
+### Open question for BG Board
+
+Does your parser's format detection see this 192-file corpus differently?
+Specifically: do you classify any files as Shamel that CSC marks as SDM?
+And do you handle the cast-list-page-1 / breakdown-sheet cases natively,
+or do they trip your detection too? Comparing per-file classification
+across both parsers is the most efficient way to find divergence points.
+
+
+---
+
+## Terminology correction (CSC, 2026-05-15)
+
+**Important context Ross flagged after the corpus analysis writeup above:**
+
+The CSC parser uses internal format strings `sdm`, `oneliner`, and `legacy`
+that are **misnomers** — these are all **variants of Movie Magic**, the
+industry-standard scheduling tool that produces ~90% of real-world
+shooting schedules. The `sdm` string is CSC-internal shorthand (from one of
+Ross's shows) that crept into format-detection naming; the actual format is
+**Movie Magic Standard**. `shamel` is the only CSC format string that
+names a real non-MM vendor.
+
+CSC's stance on cleanup:
+- Internal strings keep their current values (no migration cost for saved
+  `schedule.json` files in production).
+- A display-name layer (`format_display_name()` in `schedule_parser_cs.py`)
+  maps them to human-readable names for any UI / log output:
+  `sdm → "Movie Magic — Standard"`, `oneliner → "Movie Magic — One-Liner"`,
+  `legacy → "Movie Magic — Legacy"`, `shamel → "Shamel Studio"`.
+
+**Mapping CSC labels in this doc to industry format families:**
+
+| CSC internal | Industry format | Approx % of real-world |
+|---|---|---|
+| `sdm` | Movie Magic — Standard | ~90% (dominant) |
+| `oneliner` | Movie Magic — One-Liner | ~7% (export variant) |
+| `legacy` | Movie Magic — Legacy | ~3% (older MM exports) |
+| `shamel` | Shamel Studio | smaller industry slice |
+| _(not yet)_ | Cineapse | rare |
+| _(not yet)_ | Gorilla | rare |
+
+**Question for BG Board:** how does your detection classify the same
+192-file corpus? Specifically — if you also see most files as "Movie Magic
+Standard," our format counts should be near-identical, and the divergence
+on individual files becomes the high-value comparison. If you have a
+different classification taxonomy, mapping it onto Movie Magic
+sub-families would be useful for both of us.
+
+**Also worth noting (separate concept):** CSC's TEMPLATE names — SDM,
+Napa, GB2, LHB, blank — are visual call-sheet layouts in our product, not
+industry format classifications. They never determine parsing behavior;
+they only control the final rendered call sheet. The conflation between
+"SDM template" (a visual layout we ship) and "sdm format" (a misnamed
+internal parser string) is the source of confusion this correction fixes.
+
+---
+
+## BG Board corpus run — 2026-05-15 (192 schedules, same corpus)
+
+Replied to CSC's open question by running BG Board's parser against the
+same 192-file corpus from `schedule_analysis_ready_manifest.csv`. Full
+per-file output saved to `bgboard_corpus_results_2026-05-15.csv` in this
+repo so anyone can diff it against CSC's results.
+
+### Headline numbers
+
+| Outcome | BG Board count | BG Board pct | CSC for comparison |
+|---|---:|---:|---|
+| Clean parse (scenes present) | 188 | 98% | 88% |
+| Soft warnings (0 cast despite scenes) | 2 | 1% | 10% |
+| Hard failures (0 scenes) | 3 | 2% | 2% (3 files) |
+| Correctly rejected (non-schedule) | 1 | 1% | 0 (CSC hasn't shipped the guard) |
+
+BG Board's apparent higher clean-rate is largely because CSC's "soft warning"
+buckets surface issues we don't track yet (low cast-index ratio, single-day-many-scenes).
+On the bottom line — files where parsing genuinely fails — we are basically
+the same. The interesting story is *which* files fail on each side.
+
+### Hard failures — overlap and divergence
+
+| File | CSC outcome | BG Board outcome | Notes |
+|---|---|---|---|
+| `403_ShootSked_Blue.pdf` | Hard fail (cast-list page 1) | Hard fail (one-liner format on page 2) | **Same failure, different reasons.** CSC's page-1-skip lands on a one-liner body which their existing path handles; BG Board now skips the roster correctly (added this round) but has no one-liner extraction path, so still empty. |
+| `CH7_Block1_BLUE_Shooting Schedule.pdf` | Hard fail (independent L+R tracks) | Hard fail (same) | **CSC predicted BG Board would handle this — it does not.** Header rows like `Cast Members Jet Pack` mix label + content at distinct x-positions; my header-row test requires ~100% of words to be labels, so detection misses. Same root cause as AmAuto / GB2 mid-scene — the documented "independent left+right tracks" limitation. |
+| `Superstore 03020 BLUE Shooting Schedule 2.11.18.pdf` | Hard fail (Breakdown Sheet) | **Correctly rejected** with content-type error | BG Board ships the `Breakdown Sheet` guard this round. CSC plans to add it; current state has it as a hard failure. |
+| `GA shoot sched example.pdf` | (not in CSC's hard-fail list) | Hard fail | Grey's Anatomy YELLOW ONE LINER format. Detection correctly classifies as `mm_oneliner` but the scene-extraction path doesn't handle the compact one-liner layout. **New shared gap.** |
+
+So we both hit `CH7` for the same reason. We both hit `403` but for different
+reasons. BG Board rejected Superstore cleanly. BG Board hit one new
+oneliner case (`GA`) that may or may not appear in CSC's bucket — worth a
+cross-check.
+
+### Format-family classification (CSC-compatible strings)
+
+BG Board now emits these on every parse — same internal strings CSC uses,
+plus a `format_display_name` field with the human-readable label:
+
+| BG Board family | Display name | This corpus | CSC same corpus |
+|---|---|---:|---:|
+| `shamel` | Shamel Studio | 0 | 0 |
+| `mm_standard` | Movie Magic — Standard | 164 (85%) | 173 (90%) |
+| `mm_legacy` | Movie Magic — Legacy | 23 (12%) | 5 (3%) |
+| `mm_oneliner` | Movie Magic — One-Liner | 1 (1%) | 14 (7%) |
+| `unknown` | Unknown format | 3 (2%) | 0 |
+
+**Divergences worth investigating:**
+
+- **BG Board sees more legacy, fewer oneliner.** My `mm_legacy` detection
+  triggers when `Scene #: <id> INT/EXT` appears inline. Some files that
+  CSC reads as oneliner have an early page with that inline pattern even
+  though the body is one-liner. CSC's classifier likely uses different
+  signals — the corpus-level disagreement is the high-signal data point.
+  Suggesting we trade detection logic at some point so both projects can
+  agree per-file.
+- **BG Board's oneliner detection is too narrow** — only fires on explicit
+  "one-liner" text in first pages. CSC's 7% suggests there are signals I'm
+  missing (compact scene rows? specific column structure?). Open to
+  CSC sharing their classifier rules.
+
+### Improvements landed this round (per CSC's ROI list)
+
+1. **Cast-list-page-1 skip heuristic** — `_looks_like_cast_roster` detects
+   roster-only pages (>50% lines match `\b\d+\.[A-Z]`, no scene markers).
+   Format detection transparently advances past those. Verified on
+   `403_ShootSked_Blue.pdf` — format detection no longer trips on page 1.
+   (The remaining 403 failure is the one-liner-body issue, separate.)
+2. **Breakdown Sheet content-type rejection** — new
+   `WrongDocumentTypeError` raised from `parse_shooting_schedule()` when
+   page text contains "Breakdown Sheet" header. Also rejects "Day Out of
+   Days" reports. Server converts to a 400 with a user-readable message
+   so the import-preview modal can show "this is a breakdown, not a
+   schedule" instead of a confusing zero-scene result.
+3. **Format display-name layer** — adopted CSC's terminology correction.
+   `metadata.format_family` is the CSC-compatible internal string;
+   `metadata.format_display_name` is the human label
+   ("Movie Magic — Standard" etc.). UI shows the display name in the
+   import-preview modal.
+
+### Remaining gaps on BG Board's side
+
+- **One-liner format extraction** — detection works, extraction doesn't.
+  Would unlock 1-7% of corpus (`403` body, `GA`, and presumably most of
+  CSC's 14 oneliner files). Adding a `<scene#> INT/EXT SET ... Stage N pgs`
+  pattern with separate metadata layout would be a tractable next step.
+- **Independent left+right tracks** — still the biggest known limitation.
+  CH7 hits it. AmAuto / GB2 mid-scene hit it. CSC was hoping BG Board
+  already solved this; honest reply is no, not yet. This remains the
+  "stabilization" blocker before a shared package extraction is sensible.
+
+### For CSC
+
+Per-file results CSV: `bgboard_corpus_results_2026-05-15.csv` in the BG
+Board repo. Columns: `key, name, status, format_family, total_scenes,
+total_cast, total_bg, columns_detected, final_day, boneyard_count, error`.
+Joinable to your `schedule_analysis_ready_manifest.csv` on `key`. Curious
+which files diverge in `status` or `format_family` between our parsers —
+that's where the high-signal failure cases live.
+

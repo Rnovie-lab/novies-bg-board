@@ -391,6 +391,15 @@ class BGBoardHandler(BaseHTTPRequestHandler):
 
         except Exception as e:
             import traceback
+            # Convert the "this isn't a schedule" error to a clear user-facing
+            # 400 with the doc-type message rather than a 500 with a traceback.
+            try:
+                from schedule_parser import WrongDocumentTypeError
+                if isinstance(e, WrongDocumentTypeError):
+                    self.send_json({'error': e.message, 'doc_type': e.doc_type}, 400)
+                    return
+            except ImportError:
+                pass
             traceback.print_exc()
             self.send_json({'error': str(e)}, 500)
 

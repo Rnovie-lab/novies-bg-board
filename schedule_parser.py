@@ -620,6 +620,8 @@ class ColumnAwareScheduleParser:
             'metadata': {
                 'show_title': show_title,
                 'format': f'column-aware:{self.format_family}',
+                'format_family': self.format_family,
+                'format_display_name': format_display_name(self.format_family),
                 'total_scenes': len(in_schedule),
                 'boneyard_count': len(boneyard),
                 'final_day': final_day,
@@ -1261,21 +1263,81 @@ class ColumnAwareScheduleParser:
                 if cand and not re.match(r'^(Cast|Background|Notes|Props|Wardrobe|End\s+Day|Shoot\s+Day|DAY\s+\d|Sunrise|STAGE|Printed)', cand, re.IGNORECASE):
                     scene.synopsis = cand
 
+    # Heuristic: page is a "cast roster only" (no scene content) when it has
+    # many "N.Name" lines and lacks any scene-marker / INT/EXT hints. CSC's
+    # 403_ShootSked_Blue.pdf is the canonical case — page 1 lists every cast
+    # member then scenes start on page 2.
+    @staticmethod
+    def _looks_like_cast_roster(text: str) -> bool:
+        if not text:
+            return False
+        # Bail early if scene markers are present — definitely not roster-only.
+        if re.search(r'\bScene\s*#', text, flags=re.IGNORECASE):
+            return False
+        if re.search(r'^\s*(?:INT|EXT|INT/EXT|I/E)\b', text, flags=re.IGNORECASE | re.MULTILINE):
+            return False
+        lines = [ln for ln in text.split('\n') if ln.strip()]
+        if not lines:
+            return False
+        roster_lines = sum(
+            1 for ln in lines
+            if re.search(r'\b\d+\.[A-Z]', ln)
+        )
+        return roster_lines / max(1, len(lines)) > 0.5
+
     def _detect_format_family(self, pdf) -> str:
-        """Quick sniff of vendor signature from first 2 pages of text."""
+        """Quick sniff of vendor signature from text.
+
+        Aligned with CSC's internal taxonomy (PARSER_COORDINATION.md
+        'Terminology correction'): the bulk of real-world schedules are
+        Movie Magic variants. Strings used here are CSC-compatible to
+        make cross-project comparison easy:
+
+          shamel        — Shamel Studio
+          mm_oneliner   — Movie Magic — One-Liner (compact export)
+          mm_legacy     — Movie Magic — Legacy/old-desktop (Scene # ID inline
+                          INT/EXT SET ToD — MM_B2, AA 201_202, RAMBLER style)
+          mm_standard   — Movie Magic — Standard (labeled Cast Members/Props
+                          sections — 217, GB2, AmAuto, etc.)
+          unknown       — couldn't classify
+
+        Cast-roster-only first pages (403_ShootSked_Blue pattern) are
+        transparently skipped so format detection looks at the real schedule
+        content that follows.
+        """
         try:
-            text = ''
-            for p in pdf.pages[:2]:
-                text += (p.extract_text() or '') + '\n'
+            # Pull up to the first 3 pages, skipping any roster-only ones.
+            page_texts = []
+            for p in pdf.pages[:3]:
+                t = p.extract_text() or ''
+                if self._looks_like_cast_roster(t):
+                    continue
+                page_texts.append(t)
+                if len(page_texts) >= 2:
+                    break
+            text = '\n'.join(page_texts)
         except Exception:
             return 'unknown'
         t = text.lower()
         if 'shamelstudio.com' in t:
             return 'shamel'
-        if 'movie magic' in t or 'mm scheduling' in t:
-            return 'movie_magic'
-        # Best-effort fallback.
+        # One-Liner: explicit label in title/header text. CSC sees ~7% of
+        # corpus as oneliner.
+        if 'one-liner' in t or 'one liner' in t or 'oneliner' in t:
+            return 'mm_oneliner'
+        # Legacy: the inline-on-Scene-line format. Cheap test: look for
+        # "Scene #: <id> <INT/EXT>" pattern within the first couple pages.
+        if re.search(r'Scene\s*#:?\s*[\w.,]+\s+(?:INT|EXT|INT/EXT|I/E)\b',
+                     text, flags=re.IGNORECASE):
+            return 'mm_legacy'
+        # Default Movie Magic when there's no specific signal but the
+        # document looks MM-ish (most files in the wild).
+        if ('movie magic' in t or 'mm scheduling' in t
+                or 'shooting schedule' in t
+                or re.search(r'Cast\s+Members', text)):
+            return 'mm_standard'
         return 'unknown'
+
 
     def _extract_show_title(self, pdf) -> str:
         """Take the largest-font centered title text from page 1 if possible."""
@@ -1298,6 +1360,60 @@ class ColumnAwareScheduleParser:
         return 'Unknown Production'
 
 
+# Human-readable name for a format-family string. Mirrors CSC's
+# `format_display_name()` so both projects show the same label to users.
+def format_display_name(family: str) -> str:
+    return {
+        'shamel': 'Shamel Studio',
+        'mm_standard': 'Movie Magic — Standard',
+        'mm_oneliner': 'Movie Magic — One-Liner',
+        'mm_legacy': 'Movie Magic — Legacy',
+        'unknown': 'Unknown format',
+    }.get(family, family)
+
+
+class WrongDocumentTypeError(Exception):
+    """Raised when an uploaded PDF is detected as something other than a
+    shooting schedule (e.g. a Breakdown Sheet, Day Out of Days, or cast list).
+    The server handler converts this to a clear user-facing message."""
+    def __init__(self, doc_type: str, message: str = ''):
+        self.doc_type = doc_type
+        self.message = message or f"This appears to be a {doc_type}, not a shooting schedule."
+        super().__init__(self.message)
+
+
+# Lightweight content-type guard: scan first couple pages for telltale headers
+# that identify the document as something OTHER than a shooting schedule.
+# Returns (doc_type, message) or (None, None) when the file looks like a real
+# schedule. CSC's `Superstore 03020 BLUE Shooting Schedule 2.11.18.pdf` is the
+# canonical Breakdown Sheet case — filename says "Shooting Schedule" but the
+# content has a `Breakdown Sheet` header.
+def detect_non_schedule_doc_type(pdf_path: str):
+    try:
+        import pdfplumber
+        with pdfplumber.open(pdf_path) as pdf:
+            text = ''
+            for p in pdf.pages[:2]:
+                text += (p.extract_text() or '') + '\n'
+    except Exception:
+        return (None, None)
+    t = text.lower()
+    if 'breakdown sheet' in t:
+        return ('Movie Magic Breakdown Sheet',
+                'This is a Breakdown Sheet (one page per scene with prop/wardrobe '
+                'details), not a shooting schedule. Upload the schedule PDF instead.')
+    # Day Out of Days reports — common confusion point.
+    if 'day out of days' in t or re.search(r'\bDOOD\b', text):
+        # Be conservative: schedules sometimes mention DOOD in passing.
+        # Require it as a header (top-of-page) to flag.
+        first_lines = '\n'.join(text.split('\n')[:5]).lower()
+        if 'day out of days' in first_lines or 'dood' in first_lines.split():
+            return ('Day Out of Days report',
+                    'This is a Day Out of Days report (cast schedule grid), '
+                    'not a shooting schedule. Upload the schedule PDF instead.')
+    return (None, None)
+
+
 def parse_shooting_schedule(pdf_path: str, format_type: str = "auto") -> Dict:
     """
     Parse any shooting schedule PDF format.
@@ -1307,7 +1423,16 @@ def parse_shooting_schedule(pdf_path: str, format_type: str = "auto") -> Dict:
     the primary path finds no recognizable column headers anywhere in the PDF.
 
     Returns standardized schedule data ready for BG Board conversion.
+
+    Raises WrongDocumentTypeError when the input is detected as something
+    other than a schedule (Breakdown Sheet, Day Out of Days, etc.).
     """
+    # Content-type guard FIRST — reject non-schedule documents with a clear
+    # message rather than parsing them as empty schedules.
+    doc_type, msg = detect_non_schedule_doc_type(pdf_path)
+    if doc_type:
+        raise WrongDocumentTypeError(doc_type, msg)
+
     # Primary path: column-aware.
     column_parser = ColumnAwareScheduleParser(pdf_path)
     column_result = column_parser.parse()
@@ -1325,6 +1450,11 @@ def parse_shooting_schedule(pdf_path: str, format_type: str = "auto") -> Dict:
         heuristic_result = heuristic.parse()
         heuristic_result['metadata']['format'] = (
             f"heuristic-fallback ({heuristic_result['metadata'].get('format', 'auto-detected')})"
+        )
+        heuristic_result['metadata'].setdefault('format_family', 'unknown')
+        heuristic_result['metadata'].setdefault(
+            'format_display_name',
+            format_display_name(heuristic_result['metadata']['format_family'])
         )
         heuristic_result.setdefault('boneyard', [])
         return heuristic_result
