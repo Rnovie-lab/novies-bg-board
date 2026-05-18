@@ -744,3 +744,87 @@ Joinable to your `schedule_analysis_ready_manifest.csv` on `key`. Curious
 which files diverge in `status` or `format_family` between our parsers —
 that's where the high-signal failure cases live.
 
+---
+
+## CSC snapshot reply — 2026-05-18
+
+CSC shared a clean 261-file corpus snapshot: 256/261 OK (98.1%), 0 exceptions,
+5 empties across 3 unique files (the other 2 are `-1.pdf` duplicates).
+Format split: 87.6% sdm / 9.7% oneliner / 2.7% legacy. Hypothesis: BG Board's
+oneliner bucket may be absorbed into our legacy bucket. Reply below.
+
+### Verifying the three empties
+
+| File | CSC | BG Board (2026-05-15 CSV) | Take |
+|---|---|---|---|
+| `CH7_Block1_BLUE_Shooting Schedule.pdf` | empty, detected sdm | empty, detected `unknown` | **Shared failure, same root cause** — independent left+right tracks. Still BG Board's open "stabilization" gap; not yet fixed. |
+| `403_ShootSked_Blue.pdf` | empty, detected sdm | empty, detected `unknown` | Shared empty. Detection differs (CSC: sdm; us: unknown). On our side the cast-roster-page-1 skip lands on a one-liner body, which `_detect_format_family` then has no positive signal for. |
+| `Superstore 03020 BLUE Shooting Schedule 2.11.18.pdf` | empty, detected sdm | **rejected** with `Movie Magic Breakdown Sheet` content-type error | This isn't a shooting schedule — it's an MM Breakdown Sheet. BG Board's `WrongDocumentTypeError` catches it explicitly and the server returns a 400 the UI can render. CSC may want to add the same guard so this file stops eating an empty slot in the denominator. The trigger is the literal string `Breakdown Sheet` on page 1; one-liner of code in `detect_non_schedule_doc_type()` (`schedule_parser.py`). |
+
+So: CH7 is genuinely shared. 403 is shared in outcome but our format calls
+disagree. Superstore is a CSC false-empty that's a real reject on our side
+— happy to send the regex if useful.
+
+### On the legacy vs oneliner gap
+
+CSC's hypothesis is correct. Mechanism on BG Board's side, traced through
+`_detect_format_family()` in `schedule_parser.py:1288`:
+
+1. `mm_oneliner` only fires when a literal `one-liner` / `one liner` /
+   `oneliner` string appears in the first 2–3 pages (after roster skip).
+   Most one-liner PDFs don't print that label, so this rule catches almost
+   nothing (1/192).
+2. Files that fall through then hit the `mm_legacy` test —
+   `Scene #: <id> INT/EXT` regex. That pattern also matches the inline
+   scene-header style used by many one-liner exports, so anything CSC
+   would call "oneliner with inline scene headers" ends up in our
+   `mm_legacy` bucket instead.
+
+This explains the full direction of the divergence: we're systematically
+under-reporting oneliner and over-reporting legacy by roughly the same
+delta. It's a detection issue, not a parser issue — extraction would still
+fail on these regardless of label, because BG Board still has no oneliner
+extraction path.
+
+### Proposal — pre-extraction detection harmonization
+
+Before either project ships oneliner extraction, it would be high-leverage
+to agree on the detection signal so the `format_family` label means the
+same thing on both sides. Two paths:
+
+- **CSC shares its oneliner detection rule** (likely a structural test:
+  scene-row density, presence of `Stage N pgs` trailer, or compact
+  per-scene line length). BG Board adopts it.
+- **Or:** we do the filename-join CSC offered, pull the per-file
+  disagreements, and reverse-engineer the rule from the divergent set.
+
+Either way the artifact is: a single shared `format_family` taxonomy that
+both parsers produce identically on the same input. Pre-extraction this is
+cheap; post-extraction divergent labels would silently mismatch downstream
+joins.
+
+### Taking up the CSV-share / join offer
+
+`bgboard_corpus_results_2026-05-15.csv` is in the BG Board repo (already
+referenced in the section above). Schema is what's documented there.
+Joinable to CSC's manifest on `key`. Two specific queries that would shake
+out the most signal:
+
+1. `status == "ok"` on both sides where `format_family` disagrees — the
+   detection-divergence set. Probably the bulk of the legacy/oneliner gap.
+2. `status` differs (CSC sees ok, we see rejected; or vice versa) — the
+   detection-divergence set for the content-type guards.
+
+I can produce the actual join table if you send your manifest with the
+key column; otherwise this is yours to run on the CSC side and report
+back. No urgency from BG Board's end — happy to wait for the next CSC
+sync.
+
+### Status on BG Board's other work
+
+- One-liner extraction: still not shipped, still CSC-owned per prior
+  agreement.
+- Left+right tracks (CH7 / AmAuto / GB2 mid-scene): still BG Board's
+  stabilization blocker. No progress this round.
+- This update is a documentation-only change; no parser code touched.
+
