@@ -100,7 +100,8 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .day-date-edit:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.95)}
 .day-date-edit.empty{color:rgba(255,255,255,0.5);font-style:italic;border-color:rgba(255,255,255,0.15)}
 .day-date-edit input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;color-scheme:dark}
-.bd-totals-strip{display:flex;flex-wrap:wrap;gap:18px;padding:10px 16px;background:var(--bg-el);border:1px solid var(--brd);border-radius:6px;margin-bottom:14px}
+.bd-totals-strip{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:12px 18px;background:var(--bg-el);border:2px solid #2a7fc4;border-radius:6px;margin-top:16px;margin-bottom:14px}
+.bd-totals-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tlbl);padding-right:8px;border-right:1px solid var(--brd)}
 .bd-tot{display:flex;align-items:baseline;gap:6px;font-size:13px}
 .bd-tot strong{font-size:18px;font-weight:800}
 .bd-tot-lbl{font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.5px}
@@ -1077,6 +1078,7 @@ function renderBreakdown(){
   const totalBG=gSAG+gNU;
   const totalsStrip=state.days.length?`
     <div class="bd-totals-strip">
+      <span class="bd-totals-label">Grand Total</span>
       <span class="bd-tot"><span class="bd-tot-lbl">Stand-Ins</span><strong style="color:#52b788">${gSI}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">SAG</span><strong style="color:#457b9d">${gSAG}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">Non-Union</span><strong style="color:#9b72cf">${gNU}</strong></span>
@@ -1091,8 +1093,8 @@ function renderBreakdown(){
     </div>
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
-    ${totalsStrip}
     ${dayBlocks}
+    ${totalsStrip}
     ${renderBoneyard()}`;
 }
 
