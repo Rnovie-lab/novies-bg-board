@@ -301,6 +301,10 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 </div>
 <div id="toast" class="toast"></div>
 
+<!-- jsPDF + autoTable: client-side PDF generation (replaces window.print() for Safari compatibility) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
 <script>
 // ══════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1207,9 +1211,168 @@ function renderExport(){
     ${(state.show.showCost!==false)?`<div style="font-size:13px;color:var(--t4)">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>`:''}
   </div>
   <div style="text-align:center;margin-top:22px" class="print-hide">
-    <button class="btn btn-primary" style="font-size:15px;padding:11px 28px" onclick="window.print()">🖨 Print / Save as PDF</button>
-    <div style="font-size:12px;color:var(--tmut);margin-top:8px">Choose <strong style="color:var(--t3)">Save as PDF</strong> in the print dialog</div>
+    <button class="btn btn-primary" style="font-size:15px;padding:11px 28px" onclick="downloadPDF()">📥 Download PDF</button>
+    <div style="font-size:12px;color:var(--tmut);margin-top:8px">Saves directly to your Downloads folder — works in every browser</div>
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// PDF DOWNLOAD (client-side via jsPDF + autoTable)
+// ══════════════════════════════════════════════════════════
+// Replaces window.print() — Safari's "Save as PDF" dropdown spawns a blank
+// handoff tab that confuses users. Generating the PDF in JS bypasses the
+// OS print dialog entirely and works identically in Safari / Chrome / FF.
+function downloadPDF(){
+  if(!state.days || !state.days.length){
+    showToast('Nothing to export yet — add a shooting day first', 'error');
+    return;
+  }
+  if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){
+    showToast('PDF library still loading — try again in a moment', 'error');
+    return;
+  }
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'portrait'});
+  const M = 36;                                   // page margin (1/2")
+  const pageW = doc.internal.pageSize.getWidth();
+  const showCost = state.show.showCost !== false;
+  const s = state.show;
+
+  // ── Title block ───────────────────────────────────────────
+  doc.setFont('helvetica','bold').setFontSize(18).setTextColor(0);
+  const titleTxt = (s.episode ? s.episode + ' ' : '') + 'Extras Breakdown';
+  doc.text(titleTxt, M, M + 8);
+  doc.setDrawColor(42,127,196).setLineWidth(2).line(M, M+14, pageW-M, M+14);
+
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(60);
+  const metaLines = [];
+  if(s.name) metaLines.push(`Show: ${s.name}    Version: ${s.version||'—'}`);
+  if(s.preparedBy) metaLines.push(`Prepared by: ${s.preparedBy}${s.role?' · '+s.role:''}`);
+  let cursorY = M + 28;
+  metaLines.forEach(line => { doc.text(line, M, cursorY); cursorY += 12; });
+  cursorY += 6;
+
+  // Running grand totals (computed alongside per-day rendering)
+  let gSI=0, gSAG=0, gNU=0, gCost=0;
+
+  // ── Per-day blocks ────────────────────────────────────────
+  state.days.forEach((day, dayIdx) => {
+    const stats = getDayStats(day);
+    gSI += stats.siCount; gSAG += stats.sag; gNU += stats.nu; gCost += stats.cost;
+
+    // Page-break check: keep day header + first table row together
+    if(cursorY > 700){ doc.addPage(); cursorY = M; }
+
+    // Day header band
+    doc.setFillColor(42,127,196).rect(M, cursorY, pageW-2*M, 22, 'F');
+    doc.setFont('helvetica','bold').setFontSize(11).setTextColor(255);
+    doc.text(`DAY ${day.dayNumber} — ${day.date ? fmtDate(day.date) : 'Date TBD'}`, M+10, cursorY+15);
+    cursorY += 22;
+
+    // Build table rows
+    const body = [];
+    const workingSIs = state.standins.filter(si => !(day.standinOff||{})[si.id]);
+    if(workingSIs.length){
+      body.push([{content:'STAND-INS', colSpan:6, styles:{fillColor:[245,245,245], fontStyle:'bold', textColor:[80,80,80], fontSize:8}}]);
+      workingSIs.forEach(si => {
+        const h = getSIHours(day, si);
+        body.push([
+          {content:'1', styles:{halign:'center'}},
+          `${si.name} — ${si.character||'—'}`,
+          `$${si.rate}/8`,
+          String(h),
+          '—',
+          {content:'—', styles:{fillColor:[232,244,255]}}
+        ]);
+      });
+    }
+    (day.scenes||[]).forEach(sc => {
+      const hdr = (sc.sceneId ? `Sc. ${sc.sceneId} · ` : '') + (sc.set||'') + (sc.desc ? ` — ${sc.desc}` : '');
+      body.push([{content:hdr, colSpan:6, styles:{fillColor:[235,235,235], fontStyle:'bold', textColor:[60,60,60], fontSize:8}}]);
+      (sc.roles||[]).forEach(r => {
+        const bumpStr = (r.bumps||[]).map(b => b.label).join(', ') || '—';
+        const reuse = reuseDisplayInfo(r, day);
+        const notes = (r.notes||'') + (reuse ? ` [${reuse.label}]` : '');
+        body.push([
+          {content:String(r.count||1) + (r.minors?' (m)':''), styles:{halign:'center'}},
+          r.type||'',
+          `$${r.baseRate}/8`,
+          String(r.hours),
+          bumpStr,
+          notes || '—'
+        ]);
+      });
+    });
+
+    doc.autoTable({
+      startY: cursorY,
+      head: [['#','Type','Rate','Hrs','Bumps','Notes']],
+      body,
+      theme:'grid',
+      margin:{left:M, right:M},
+      styles:{fontSize:9, cellPadding:4, overflow:'linebreak', textColor:[20,20,20], lineColor:[180,180,180]},
+      headStyles:{fillColor:[235,235,235], textColor:[60,60,60], fontStyle:'bold', fontSize:8},
+      columnStyles:{
+        0:{cellWidth:30, halign:'center'},
+        1:{cellWidth:170},
+        2:{cellWidth:55},
+        3:{cellWidth:35, halign:'center'},
+        4:{cellWidth:120},
+        5:{cellWidth:'auto'}
+      },
+      didDrawPage: () => {} // (placeholder — could add footer here later)
+    });
+    cursorY = doc.lastAutoTable.finalY + 4;
+
+    // Day totals strip
+    if(cursorY > 720){ doc.addPage(); cursorY = M; }
+    doc.setFillColor(248,248,248).rect(M, cursorY, pageW-2*M, 18, 'F');
+    doc.setDrawColor(180).setLineWidth(0.5).rect(M, cursorY, pageW-2*M, 18, 'S');
+    doc.setFont('helvetica','bold').setFontSize(9).setTextColor(40);
+    const totalsLeft = `TOTAL EXTRAS (excl SI's): ${stats.sag+stats.nu}    STAND-INS: ${stats.siCount}    SAG: ${stats.sag}    NON UNION: ${stats.nu}`;
+    doc.text(totalsLeft, M+8, cursorY+12);
+    if(showCost){
+      const costTxt = `Est: ${$m(stats.cost)}`;
+      const w = doc.getTextWidth(costTxt);
+      doc.setTextColor(82,183,136).text(costTxt, pageW-M-w-8, cursorY+12);
+    }
+    cursorY += 26;
+  });
+
+  // ── Grand totals block ────────────────────────────────────
+  if(cursorY > 680){ doc.addPage(); cursorY = M; }
+  doc.setFillColor(248,248,248).rect(M, cursorY, pageW-2*M, 60, 'F');
+  doc.setDrawColor(170).setLineWidth(0.5).rect(M, cursorY, pageW-2*M, 60, 'S');
+  doc.setFont('helvetica','bold').setFontSize(9).setTextColor(120);
+  doc.text('GRAND TOTALS', M+10, cursorY+14);
+
+  const cells = [
+    ['Stand-Ins', String(gSI), [82,183,136]],
+    ['SAG Background', String(gSAG), [69,123,157]],
+    ['Non-Union', String(gNU), [155,114,207]],
+    ['Total BG + SI', String(gSI+gSAG+gNU), [42,127,196]],
+  ];
+  const cellW = (pageW - 2*M - 20) / cells.length;
+  cells.forEach((c, i) => {
+    const cx = M + 10 + i*cellW;
+    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
+    doc.text(c[0].toUpperCase(), cx, cursorY+30);
+    doc.setFont('helvetica','bold').setFontSize(18).setTextColor(c[2][0], c[2][1], c[2][2]);
+    doc.text(c[1], cx, cursorY+50);
+  });
+  cursorY += 60;
+  if(showCost){
+    doc.setFont('helvetica','normal').setFontSize(11).setTextColor(60);
+    doc.text('Estimated Total Cost:', M+10, cursorY+16);
+    doc.setFont('helvetica','bold').setFontSize(13).setTextColor(82,183,136);
+    doc.text($m(gCost), M+10+doc.getTextWidth('Estimated Total Cost: '), cursorY+16);
+  }
+
+  // ── Filename: show + episode + date ───────────────────────
+  const safe = x => String(x||'').replace(/[^a-z0-9_\-]+/gi,'_').replace(/^_+|_+$/g,'');
+  const stamp = new Date().toISOString().slice(0,10);
+  const fname = [safe(s.name)||'BGBoard', safe(s.episode), 'ExtrasBreakdown', stamp].filter(Boolean).join('_') + '.pdf';
+  doc.save(fname);
 }
 
 // ══════════════════════════════════════════════════════════
