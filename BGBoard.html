@@ -106,6 +106,8 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .bd-tot strong{font-size:18px;font-weight:800}
 .bd-tot-lbl{font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.5px}
 .bd-tot-cost{margin-left:auto}
+.bd-totals-toggle{margin-left:8px;background:transparent;border:1px solid var(--brd);color:var(--tmut);width:24px;height:24px;border-radius:3px;cursor:pointer;font-size:14px;line-height:1;padding:0}
+.bd-totals-toggle:hover{color:var(--t1);border-color:#2a7fc4}
 .day-stats{display:flex;gap:18px;align-items:center}
 .day-stat{font-size:11px;color:rgba(255,255,255,0.65);font-weight:600;letter-spacing:0.3px}
 .day-stat strong{color:#fff;font-size:13px}
@@ -1076,6 +1078,7 @@ function renderBreakdown(){
   let gSI=0,gSAG=0,gNU=0,gCost=0;
   state.days.forEach(d=>{const s=getDayStats(d);gSI+=s.siCount;gSAG+=s.sag;gNU+=s.nu;gCost+=s.cost;});
   const totalBG=gSAG+gNU;
+  const tp=getTotalsPos();
   const totalsStrip=state.days.length?`
     <div class="bd-totals-strip">
       <span class="bd-totals-label">Grand Total</span>
@@ -1085,6 +1088,7 @@ function renderBreakdown(){
       <span class="bd-tot"><span class="bd-tot-lbl">Total BG</span><strong style="color:#e63946">${totalBG}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">Total BG + SI</span><strong style="color:#2a7fc4">${gSI+totalBG}</strong></span>
       ${state.show.showCost!==false?`<span class="bd-tot bd-tot-cost"><span class="bd-tot-lbl">Est. Cost</span><strong style="color:#52b788">${$m(gCost)}</strong></span>`:''}
+      <button class="bd-totals-toggle" onclick="toggleTotalsPos()" title="Move totals to ${tp==='top'?'bottom':'top'}">${tp==='top'?'↓':'↑'}</button>
     </div>`:'';
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -1093,8 +1097,9 @@ function renderBreakdown(){
     </div>
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
+    ${tp==='top'?totalsStrip:''}
     ${dayBlocks}
-    ${totalsStrip}
+    ${tp==='bottom'?totalsStrip:''}
     ${renderBoneyard()}`;
 }
 
@@ -1418,6 +1423,8 @@ function addDay(){
 }
 function deleteDay(id){if(!confirm('Delete this day and all scenes?'))return;state.days=state.days.filter(d=>d.id!==id);save();render();}
 function setDayDate(id,val){const d=state.days.find(x=>x.id===id);if(!d)return;d.date=val||'';save();render();}
+function getTotalsPos(){return (state.preferences&&state.preferences.totalsPosition)||'top';}
+function toggleTotalsPos(){state.preferences=state.preferences||{};state.preferences.totalsPosition=getTotalsPos()==='top'?'bottom':'top';save();render();}
 function deleteScene(dayId,sceneId){if(!confirm('Delete this scene?'))return;const d=state.days.find(x=>x.id===dayId);if(d)d.scenes=d.scenes.filter(s=>s.id!==sceneId);save();render();}
 function deleteRole(dayId,sceneId,roleId){const d=state.days.find(x=>x.id===dayId);const s=d?.scenes.find(x=>x.id===sceneId);if(s)s.roles=(s.roles||[]).filter(r=>r.id!==roleId);save();render();}
 
