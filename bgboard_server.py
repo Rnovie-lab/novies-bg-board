@@ -59,6 +59,74 @@ USAGE_FILE   = SERVER_DIR / 'usage_counter.json'
 PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
 
+# ── Clerk auth ────────────────────────────────────────────────────────────────
+# Verifies Clerk session JWTs locally via JWKS — no Clerk API round-trip per
+# request. When env vars are absent (local dev), auth is OFF: anyone can hit
+# /saves. When CLERK_PUBLISHABLE_KEY is set (Railway), auth is REQUIRED.
+
+CLERK_PUBLISHABLE_KEY = os.environ.get('CLERK_PUBLISHABLE_KEY', '')
+CLERK_SECRET_KEY      = os.environ.get('CLERK_SECRET_KEY', '')
+AUTH_ENABLED          = bool(CLERK_PUBLISHABLE_KEY)
+
+try:
+    import jwt
+    from jwt import PyJWKClient
+    HAS_JWT = True
+except ImportError:
+    HAS_JWT = False
+    if AUTH_ENABLED:
+        print("⚠ CLERK_PUBLISHABLE_KEY is set but PyJWT is not installed — auth will FAIL CLOSED")
+
+def _clerk_domain():
+    """Decode the Clerk frontend-API domain from the publishable key."""
+    if not CLERK_PUBLISHABLE_KEY:
+        return None
+    import base64
+    try:
+        parts = CLERK_PUBLISHABLE_KEY.split('_', 2)
+        if len(parts) < 3:
+            return None
+        return base64.b64decode(parts[2]).decode('utf-8').rstrip('$')
+    except Exception:
+        return None
+
+_jwks_client = None
+def _get_jwks_client():
+    """One-time JWKS client init (caches keys internally)."""
+    global _jwks_client
+    if _jwks_client is not None:
+        return _jwks_client
+    if not HAS_JWT:
+        return None
+    domain = _clerk_domain()
+    if not domain:
+        return None
+    _jwks_client = PyJWKClient(f'https://{domain}/.well-known/jwks.json')
+    return _jwks_client
+
+def verify_clerk_token(token):
+    """Verify a Clerk session JWT. Returns Clerk user_id (sub claim) or None."""
+    client = _get_jwks_client()
+    if not client or not token:
+        return None
+    try:
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token, signing_key.key, algorithms=['RS256'],
+            # Clerk session JWTs don't include an `aud` claim by default
+            options={'verify_aud': False},
+        )
+        return payload.get('sub')
+    except Exception as e:
+        if IS_LOCAL:
+            print(f"  ✗ JWT verify failed: {e}")
+        return None
+
+if AUTH_ENABLED:
+    print(f"✓ Clerk auth ENABLED (domain: {_clerk_domain()})")
+else:
+    print("ℹ Clerk auth DISABLED (CLERK_PUBLISHABLE_KEY not set) — running open")
+
 def _read_usage():
     offset = int(os.environ.get('USAGE_OFFSET', 0))
     if USAGE_FILE.exists():
@@ -90,11 +158,34 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authed_user_id(self):
+        """Returns the Clerk user_id from Bearer token, or None if not authed.
+        When AUTH_ENABLED is False, returns the sentinel '__open__' so save
+        scoping still works (single shared workspace in local dev)."""
+        if not AUTH_ENABLED:
+            return '__open__'
+        auth = self.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            return None
+        return verify_clerk_token(auth[7:])
+
+    def _require_auth(self):
+        """Send 401 + return None if not authed; otherwise return user_id."""
+        user_id = self._authed_user_id()
+        if not user_id:
+            self.send_json({'error': 'auth_required'}, 401)
+            return None
+        return user_id
+
     def do_GET(self):
         path = self.path.split('?')[0].lstrip('/')
         if path == '' or path == 'BGBoard.html':
             path = 'BGBoard.html'
-        # ── Saves API ──────────────────────────────────────────
+        # ── Public config (Clerk publishable key for frontend bootstrap) ──
+        if path == 'config':
+            self.send_json({'clerkPublishableKey': CLERK_PUBLISHABLE_KEY})
+            return
+        # ── Saves API (auth-gated) ─────────────────────────────
         if path == 'saves':
             self._saves_list(); return
         if path.startswith('saves/'):
@@ -123,7 +214,7 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         self.end_headers()
 
     def do_DELETE(self):
@@ -151,12 +242,25 @@ class BGBoardHandler(BaseHTTPRequestHandler):
 
     # ── Saves API ─────────────────────────────────────────────────────────────
 
+    # ── Saves API ─────────────────────────────────────────────────────────────
+    # All save endpoints require auth and scope by Clerk user_id. Each save
+    # carries a `_userId` field; list filters by it, load/delete/duplicate
+    # 404 (not 403) when the save isn't owned by the caller — don't leak
+    # existence to other users.
+
     def _saves_list(self):
+        user_id = self._require_auth()
+        if not user_id: return
         SAVES_DIR.mkdir(exist_ok=True)
         saves = []
         for f in sorted(SAVES_DIR.glob('*.json'), key=lambda x: x.stat().st_mtime, reverse=True):
             try:
                 data = json.loads(f.read_text())
+                # Filter by ownership only when auth is enabled. In local-dev
+                # mode (AUTH_ENABLED=False), show every save including legacy
+                # ones with no _userId.
+                if AUTH_ENABLED and data.get('_userId') != user_id:
+                    continue
                 saves.append({
                     'id':        data.get('_saveId', f.stem),
                     'name':      data.get('_saveName', 'Untitled'),
@@ -172,47 +276,71 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         self.send_json({'saves': saves})
 
     def _saves_load(self, save_id):
+        user_id = self._require_auth()
+        if not user_id: return
         f = SAVES_DIR / f'{save_id}.json'
         if not f.exists():
             self.send_json({'error': 'Not found'}, 404); return
-        self.send_json({'ok': True, 'state': json.loads(f.read_text())})
+        data = json.loads(f.read_text())
+        if AUTH_ENABLED and data.get('_userId') != user_id:
+            # 404 not 403: don't leak existence of someone else's save
+            self.send_json({'error': 'Not found'}, 404); return
+        self.send_json({'ok': True, 'state': data})
 
     def _saves_create(self):
+        user_id = self._require_auth()
+        if not user_id: return
         length = int(self.headers.get('Content-Length', 0))
         body   = json.loads(self.rfile.read(length))
         save_id   = body.get('id') or str(uuid.uuid4())[:8]
         save_name = body.get('name', 'Untitled')
         state_data = body.get('state', {})
+        # If updating an existing save, verify ownership first
+        existing = SAVES_DIR / f'{save_id}.json'
+        if existing.exists():
+            prev = json.loads(existing.read_text())
+            if AUTH_ENABLED and prev.get('_userId') and prev.get('_userId') != user_id:
+                self.send_json({'error': 'Not found'}, 404); return
         state_data['_saveId']   = save_id
         state_data['_saveName'] = save_name
         state_data['_savedAt']  = body.get('savedAt', '')
+        state_data['_userId']   = user_id
         SAVES_DIR.mkdir(exist_ok=True)
         (SAVES_DIR / f'{save_id}.json').write_text(json.dumps(state_data, indent=2))
-        print(f"  ✓ Saved: '{save_name}' ({save_id})")
+        print(f"  ✓ Saved: '{save_name}' ({save_id}) for {user_id}")
         self.send_json({'ok': True, 'id': save_id})
 
     def _saves_delete(self, save_id):
-        f = SAVES_DIR / f'{save_id}.json'
-        if f.exists():
-            f.unlink()
-            print(f"  ✓ Deleted save: {save_id}")
-            self.send_json({'ok': True})
-        else:
-            self.send_json({'error': 'Not found'}, 404)
-
-    def _saves_duplicate(self, save_id):
-        import copy
+        user_id = self._require_auth()
+        if not user_id: return
         f = SAVES_DIR / f'{save_id}.json'
         if not f.exists():
             self.send_json({'error': 'Not found'}, 404); return
+        data = json.loads(f.read_text())
+        if AUTH_ENABLED and data.get('_userId') != user_id:
+            self.send_json({'error': 'Not found'}, 404); return
+        f.unlink()
+        print(f"  ✓ Deleted save: {save_id}")
+        self.send_json({'ok': True})
+
+    def _saves_duplicate(self, save_id):
+        import copy
+        user_id = self._require_auth()
+        if not user_id: return
+        f = SAVES_DIR / f'{save_id}.json'
+        if not f.exists():
+            self.send_json({'error': 'Not found'}, 404); return
+        orig = json.loads(f.read_text())
+        if AUTH_ENABLED and orig.get('_userId') != user_id:
+            self.send_json({'error': 'Not found'}, 404); return
         length = int(self.headers.get('Content-Length', 0))
         body   = json.loads(self.rfile.read(length)) if length > 0 else {}
-        orig      = json.loads(f.read_text())
         new_state = copy.deepcopy(orig)
         new_id    = str(uuid.uuid4())[:8]
         new_state['_saveId']   = new_id
         new_state['_saveName'] = body.get('name', orig.get('_saveName', 'Untitled') + ' (copy)')
         new_state['_savedAt']  = body.get('savedAt', '')
+        new_state['_userId']   = user_id
         # If caller opts out of standins, wipe roster + per-day overrides
         if not body.get('carryStandins', True):
             new_state['standins'] = []

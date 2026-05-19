@@ -292,6 +292,7 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
     <button class="btn btn-secondary btn-sm" onclick="resetAll()" title="Wipe the current in-progress board · saved projects are not affected">Delete</button>
   </div>
   <div class="nav-show-info" id="nav-info"></div>
+  <div id="clerk-user-btn" style="margin-left:12px;min-width:32px;display:flex;align-items:center"></div>
 </div>
 
 <div id="main"></div>
@@ -2788,14 +2789,102 @@ function updateThemeBtn(){
 }
 
 // ══════════════════════════════════════════════════════════
-// INIT
+// AUTH (Clerk) + INIT
 // ══════════════════════════════════════════════════════════
-document.querySelectorAll('.nav-tab').forEach(t=>{
-  t.addEventListener('click',()=>{currentTab=t.dataset.tab;render();});
-});
-initTheme();
-incrementUsage();
-render();
+// Bootstrap flow:
+//   1. Fetch /config to get the Clerk publishable key (if any)
+//   2. If a key is present, load Clerk SDK, init, require sign-in
+//   3. If no key (local dev), skip auth and run as before
+// All fetches to /saves* are wrapped to inject a Bearer token automatically.
+
+// Fetch wrapper: attach Authorization header to protected endpoints and
+// auto-prompt sign-in on 401. Defined before init so existing fetch() calls
+// are intercepted transparently.
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(url, opts={}){
+  const u = String(url);
+  const isProtected = /^\/?(saves)(\b|\/)/.test(u);
+  if(isProtected && window.__clerk && window.__clerk.session){
+    try{
+      const token = await window.__clerk.session.getToken();
+      if(token){
+        opts.headers = Object.assign({}, opts.headers||{}, {'Authorization':'Bearer '+token});
+      }
+    }catch(e){/* fall through — server will 401 if needed */}
+  }
+  const res = await _origFetch(url, opts);
+  if(isProtected && res.status === 401 && window.__clerk){
+    window.__clerk.openSignIn();
+  }
+  return res;
+};
+
+async function bootstrap(){
+  // Wire up tab buttons + theme (these are pre-auth concerns)
+  document.querySelectorAll('.nav-tab').forEach(t=>{
+    t.addEventListener('click',()=>{currentTab=t.dataset.tab;render();});
+  });
+  initTheme();
+  incrementUsage();
+
+  // Read public config from server
+  let cfg = {};
+  try{ cfg = await (await _origFetch('/config')).json(); }
+  catch(e){ console.warn('Could not load /config — running without auth', e); }
+
+  const pk = cfg.clerkPublishableKey;
+  if(!pk){
+    // No Clerk configured (local dev) — render immediately, no auth
+    render();
+    return;
+  }
+
+  // Dynamic-load the Clerk JS SDK from the tenant's frontend-API domain
+  // (domain is base64-encoded in the publishable key after the second '_')
+  const clerkDomain = atob(pk.split('_')[2]).replace(/\$+$/,'');
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=`https://${clerkDomain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+    s.async=true; s.crossOrigin='anonymous';
+    s.onload=resolve;
+    s.onerror=()=>reject(new Error('Clerk SDK failed to load — check Clerk domain in publishable key'));
+    document.head.appendChild(s);
+  });
+
+  const clerk = new window.Clerk(pk);
+  await clerk.load();
+  window.__clerk = clerk;
+
+  // Mount Clerk's UserButton (avatar + sign-out dropdown) into the nav
+  const userBtnEl = document.getElementById('clerk-user-btn');
+  if(userBtnEl && clerk.user){
+    clerk.mountUserButton(userBtnEl);
+  }
+
+  // Re-mount + re-render whenever auth state changes (sign in / sign out)
+  clerk.addListener(({user})=>{
+    if(user && userBtnEl){
+      userBtnEl.innerHTML = '';
+      clerk.mountUserButton(userBtnEl);
+    }
+    if(!user){
+      // Signed out — clear local state and prompt sign-in
+      state = defaultState();
+      save();
+      clerk.openSignIn();
+    } else {
+      render();
+    }
+  });
+
+  if(!clerk.user){
+    clerk.openSignIn();
+  } else {
+    render();
+  }
+}
+
+bootstrap();
 </script>
 
 <!-- ── Novie's App Suite Footer ─────────────────────────────────────────── -->
