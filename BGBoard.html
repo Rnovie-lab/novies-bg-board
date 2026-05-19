@@ -96,6 +96,14 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .day-hdr-left{display:flex;align-items:center;gap:12px}
 .day-label{font-size:15px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1.2px}
 .day-date-str{font-size:12px;color:rgba(255,255,255,0.7);font-weight:400}
+.day-date-input{font-size:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.85);border-radius:3px;padding:2px 5px;cursor:pointer;font-family:inherit}
+.day-date-input:hover{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.3)}
+.day-date-input::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer}
+.bd-totals-strip{display:flex;flex-wrap:wrap;gap:18px;padding:10px 16px;background:var(--bg-el);border:1px solid var(--brd);border-radius:6px;margin-bottom:14px}
+.bd-tot{display:flex;align-items:baseline;gap:6px;font-size:13px}
+.bd-tot strong{font-size:18px;font-weight:800}
+.bd-tot-lbl{font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.5px}
+.bd-tot-cost{margin-left:auto}
 .day-stats{display:flex;gap:18px;align-items:center}
 .day-stat{font-size:11px;color:rgba(255,255,255,0.65);font-weight:600;letter-spacing:0.3px}
 .day-stat strong{color:#fff;font-size:13px}
@@ -1029,6 +1037,7 @@ function renderBreakdown(){
           <span id="day-tog-${day.id}" style="color:#fff;font-size:11px;width:16px">${expanded?'▼':'▶'}</span>
           <span class="day-label">Day ${day.dayNumber}</span>
           ${day.date?`<span class="day-date-str">${fmtDate(day.date)}</span>`:''}
+          <input type="date" class="day-date-input" value="${day.date||''}" onclick="event.stopPropagation()" onchange="setDayDate('${day.id}', this.value)" title="${day.date?'Edit date':'Set date'}">
         </div>
         <div class="day-stats">
           <span class="day-stat">SI: <strong>${stats.siCount}</strong></span>
@@ -1059,6 +1068,19 @@ function renderBreakdown(){
   }).join('');
 
   const titleParts=[state.show.name,state.show.episode?'Ep '+state.show.episode:''].filter(Boolean);
+  // Grand totals across all days (mirrors what the export page shows)
+  let gSI=0,gSAG=0,gNU=0,gCost=0;
+  state.days.forEach(d=>{const s=getDayStats(d);gSI+=s.siCount;gSAG+=s.sag;gNU+=s.nu;gCost+=s.cost;});
+  const totalBG=gSAG+gNU;
+  const totalsStrip=state.days.length?`
+    <div class="bd-totals-strip">
+      <span class="bd-tot"><span class="bd-tot-lbl">Stand-Ins</span><strong style="color:#52b788">${gSI}</strong></span>
+      <span class="bd-tot"><span class="bd-tot-lbl">SAG</span><strong style="color:#457b9d">${gSAG}</strong></span>
+      <span class="bd-tot"><span class="bd-tot-lbl">Non-Union</span><strong style="color:#9b72cf">${gNU}</strong></span>
+      <span class="bd-tot"><span class="bd-tot-lbl">Total BG</span><strong style="color:#e63946">${totalBG}</strong></span>
+      <span class="bd-tot"><span class="bd-tot-lbl">Total BG + SI</span><strong style="color:#2a7fc4">${gSI+totalBG}</strong></span>
+      ${state.show.showCost!==false?`<span class="bd-tot bd-tot-cost"><span class="bd-tot-lbl">Est. Cost</span><strong style="color:#52b788">${$m(gCost)}</strong></span>`:''}
+    </div>`:'';
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div style="font-size:20px;font-weight:800;color:var(--t1)">${esc(titleParts.join(' · '))}</div>
@@ -1066,6 +1088,7 @@ function renderBreakdown(){
     </div>
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
+    ${totalsStrip}
     ${dayBlocks}
     ${renderBoneyard()}`;
 }
@@ -1389,6 +1412,7 @@ function addDay(){
   save();render();
 }
 function deleteDay(id){if(!confirm('Delete this day and all scenes?'))return;state.days=state.days.filter(d=>d.id!==id);save();render();}
+function setDayDate(id,val){const d=state.days.find(x=>x.id===id);if(!d)return;d.date=val||'';save();render();}
 function deleteScene(dayId,sceneId){if(!confirm('Delete this scene?'))return;const d=state.days.find(x=>x.id===dayId);if(d)d.scenes=d.scenes.filter(s=>s.id!==sceneId);save();render();}
 function deleteRole(dayId,sceneId,roleId){const d=state.days.find(x=>x.id===dayId);const s=d?.scenes.find(x=>x.id===sceneId);if(s)s.roles=(s.roles||[]).filter(r=>r.id!==roleId);save();render();}
 

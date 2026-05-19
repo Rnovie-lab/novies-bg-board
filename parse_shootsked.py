@@ -109,18 +109,56 @@ def uid():
     return str(uuid.uuid4())[:8]
 
 MONTHS = {
-    'january':'01','february':'02','march':'03','april':'04',
-    'may':'05','june':'06','july':'07','august':'08',
-    'september':'09','october':'10','november':'11','december':'12'
+    'january':'01','jan':'01',
+    'february':'02','feb':'02',
+    'march':'03','mar':'03',
+    'april':'04','apr':'04',
+    'may':'05',
+    'june':'06','jun':'06',
+    'july':'07','jul':'07',
+    'august':'08','aug':'08',
+    'september':'09','sept':'09','sep':'09',
+    'october':'10','oct':'10',
+    'november':'11','nov':'11',
+    'december':'12','dec':'12'
 }
 
 def parse_date(text):
-    """Extract YYYY-MM-DD from 'Monday, October 27, 2025' or 'April 23, 2025'."""
+    """Extract YYYY-MM-DD from common shooting-schedule date formats.
+
+    Handles: 'Monday, October 27, 2025', 'October 27 2025', 'Oct 27, 2025',
+    '10/27/2025', '10/27/25', '10-27-2025', '27 October 2025', '2025-10-27'.
+    Returns '' if no recognizable date is found.
+    """
+    if not text:
+        return ''
     try:
-        m = re.search(r'(\w+)\s+(\d{1,2}),\s+(\d{4})', text or '', re.I)
+        # 'Month DD, YYYY' or 'Month DD YYYY' (comma optional) — with or without leading weekday
+        m = re.search(r'\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b', text)
         if m:
             month = MONTHS.get(m.group(1).lower(), '00')
-            return f"{m.group(3)}-{month}-{m.group(2).zfill(2)}"
+            if month != '00':
+                return f"{m.group(3)}-{month}-{m.group(2).zfill(2)}"
+        # 'DD Month YYYY' (international order)
+        m = re.search(r'\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})\b', text)
+        if m:
+            month = MONTHS.get(m.group(2).lower(), '00')
+            if month != '00':
+                return f"{m.group(3)}-{month}-{m.group(1).zfill(2)}"
+        # 'MM/DD/YYYY' or 'MM/DD/YY' (US numeric)
+        m = re.search(r'\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b', text)
+        if m:
+            mm, dd, yy = m.group(1), m.group(2), m.group(3)
+            if len(yy) == 2: yy = '20' + yy
+            return f"{yy}-{mm.zfill(2)}-{dd.zfill(2)}"
+        # 'MM-DD-YYYY' (less common but seen in some templates)
+        m = re.search(r'\b(\d{1,2})-(\d{1,2})-(\d{4})\b', text)
+        if m:
+            return f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"
+        # 'YYYY-MM-DD' (ISO — rare in schedules but cheap to support)
+        m = re.search(r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b', text)
+        if m:
+            return f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
     except Exception:
         pass
     return ''
