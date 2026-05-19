@@ -1081,7 +1081,7 @@ function renderBreakdown(){
   const tp=getTotalsPos();
   const totalsStrip=state.days.length?`
     <div class="bd-totals-strip">
-      <span class="bd-totals-label">Grand Total</span>
+      <span class="bd-totals-label">Project Total</span>
       <span class="bd-tot"><span class="bd-tot-lbl">Stand-Ins</span><strong style="color:#52b788">${gSI}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">SAG</span><strong style="color:#457b9d">${gSAG}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">Non-Union</span><strong style="color:#9b72cf">${gNU}</strong></span>
@@ -1233,17 +1233,20 @@ function renderExport(){
     </div>
   </div>
   ${state.days.length===0?`<div class="empty card"><div class="empty-icon">📄</div>No data yet.</div>`:''}
-  ${dayBlocks}
-  <div class="grand-totals">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tlbl);margin-bottom:12px">Grand Totals</div>
-    <div class="grand-grid">
-      <div class="grand-item"><div class="glbl">Stand-Ins</div><div class="gval" style="color:#52b788">${gSI}</div></div>
-      <div class="grand-item"><div class="glbl">SAG Background</div><div class="gval" style="color:#457b9d">${gSAG}</div></div>
-      <div class="grand-item"><div class="glbl">Non-Union</div><div class="gval" style="color:#9b72cf">${gNU}</div></div>
-      <div class="grand-item"><div class="glbl">Total BG + SI</div><div class="gval" style="color:#2a7fc4">${gSI+gSAG+gNU}</div></div>
-    </div>
-    ${(state.show.showCost!==false)?`<div style="font-size:13px;color:var(--t4)">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>`:''}
-  </div>
+  ${(()=>{const tp=getTotalsPos();const block=state.days.length?`
+    <div class="grand-totals">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tlbl)">Project Total</div>
+        <button class="bd-totals-toggle print-hide" onclick="toggleTotalsPos()" title="Move totals to ${tp==='top'?'bottom':'top'}">${tp==='top'?'↓':'↑'}</button>
+      </div>
+      <div class="grand-grid">
+        <div class="grand-item"><div class="glbl">Stand-Ins</div><div class="gval" style="color:#52b788">${gSI}</div></div>
+        <div class="grand-item"><div class="glbl">SAG Background</div><div class="gval" style="color:#457b9d">${gSAG}</div></div>
+        <div class="grand-item"><div class="glbl">Non-Union</div><div class="gval" style="color:#9b72cf">${gNU}</div></div>
+        <div class="grand-item"><div class="glbl">Total BG + SI</div><div class="gval" style="color:#2a7fc4">${gSI+gSAG+gNU}</div></div>
+      </div>
+      ${(state.show.showCost!==false)?`<div style="font-size:13px;color:var(--t4)">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>`:''}
+    </div>`:'';return `${tp==='top'?block:''}${dayBlocks}${tp==='bottom'?block:''}`;})()}
   <div style="text-align:center;margin-top:22px" class="print-hide">
     <button class="btn btn-primary" style="font-size:15px;padding:11px 28px" onclick="downloadPDF()">📥 Download PDF</button>
     <div style="font-size:12px;color:var(--tmut);margin-top:8px">Saves directly to your Downloads folder — works in every browser</div>
@@ -1286,13 +1289,46 @@ function downloadPDF(){
   metaLines.forEach(line => { doc.text(line, M, cursorY); cursorY += 12; });
   cursorY += 6;
 
-  // Running grand totals (computed alongside per-day rendering)
+  // Pre-compute grand totals so we can place them at top or bottom
   let gSI=0, gSAG=0, gNU=0, gCost=0;
+  state.days.forEach(d => { const s = getDayStats(d); gSI+=s.siCount; gSAG+=s.sag; gNU+=s.nu; gCost+=s.cost; });
+  const tp = getTotalsPos();
+
+  const drawGrandTotals = () => {
+    if(cursorY > 680){ doc.addPage(); cursorY = M; }
+    doc.setFillColor(248,248,248).rect(M, cursorY, pageW-2*M, 60, 'F');
+    doc.setDrawColor(170).setLineWidth(0.5).rect(M, cursorY, pageW-2*M, 60, 'S');
+    doc.setFont('helvetica','bold').setFontSize(9).setTextColor(120);
+    doc.text('PROJECT TOTAL', M+10, cursorY+14);
+    const cells = [
+      ['Stand-Ins', String(gSI), [82,183,136]],
+      ['SAG Background', String(gSAG), [69,123,157]],
+      ['Non-Union', String(gNU), [155,114,207]],
+      ['Total BG + SI', String(gSI+gSAG+gNU), [42,127,196]],
+    ];
+    const cellW = (pageW - 2*M - 20) / cells.length;
+    cells.forEach((c, i) => {
+      const cx = M + 10 + i*cellW;
+      doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
+      doc.text(c[0].toUpperCase(), cx, cursorY+30);
+      doc.setFont('helvetica','bold').setFontSize(18).setTextColor(c[2][0], c[2][1], c[2][2]);
+      doc.text(c[1], cx, cursorY+50);
+    });
+    cursorY += 60;
+    if(showCost){
+      doc.setFont('helvetica','normal').setFontSize(11).setTextColor(60);
+      doc.text('Estimated Total Cost:', M+10, cursorY+16);
+      doc.setFont('helvetica','bold').setFontSize(13).setTextColor(82,183,136);
+      doc.text($m(gCost), M+10+doc.getTextWidth('Estimated Total Cost: '), cursorY+16);
+      cursorY += 24;
+    }
+  };
+
+  if(tp === 'top') drawGrandTotals();
 
   // ── Per-day blocks ────────────────────────────────────────
   state.days.forEach((day, dayIdx) => {
     const stats = getDayStats(day);
-    gSI += stats.siCount; gSAG += stats.sag; gNU += stats.nu; gCost += stats.cost;
 
     // Page-break check: keep day header + first table row together
     if(cursorY > 700){ doc.addPage(); cursorY = M; }
@@ -1373,34 +1409,8 @@ function downloadPDF(){
     cursorY += 26;
   });
 
-  // ── Grand totals block ────────────────────────────────────
-  if(cursorY > 680){ doc.addPage(); cursorY = M; }
-  doc.setFillColor(248,248,248).rect(M, cursorY, pageW-2*M, 60, 'F');
-  doc.setDrawColor(170).setLineWidth(0.5).rect(M, cursorY, pageW-2*M, 60, 'S');
-  doc.setFont('helvetica','bold').setFontSize(9).setTextColor(120);
-  doc.text('GRAND TOTALS', M+10, cursorY+14);
-
-  const cells = [
-    ['Stand-Ins', String(gSI), [82,183,136]],
-    ['SAG Background', String(gSAG), [69,123,157]],
-    ['Non-Union', String(gNU), [155,114,207]],
-    ['Total BG + SI', String(gSI+gSAG+gNU), [42,127,196]],
-  ];
-  const cellW = (pageW - 2*M - 20) / cells.length;
-  cells.forEach((c, i) => {
-    const cx = M + 10 + i*cellW;
-    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
-    doc.text(c[0].toUpperCase(), cx, cursorY+30);
-    doc.setFont('helvetica','bold').setFontSize(18).setTextColor(c[2][0], c[2][1], c[2][2]);
-    doc.text(c[1], cx, cursorY+50);
-  });
-  cursorY += 60;
-  if(showCost){
-    doc.setFont('helvetica','normal').setFontSize(11).setTextColor(60);
-    doc.text('Estimated Total Cost:', M+10, cursorY+16);
-    doc.setFont('helvetica','bold').setFontSize(13).setTextColor(82,183,136);
-    doc.text($m(gCost), M+10+doc.getTextWidth('Estimated Total Cost: '), cursorY+16);
-  }
+  // ── Project Total block (drawn at bottom if position == 'bottom') ──
+  if(tp === 'bottom') drawGrandTotals();
 
   // ── Filename: show + episode + date ───────────────────────
   const safe = x => String(x||'').replace(/[^a-z0-9_\-]+/gi,'_').replace(/^_+|_+$/g,'');
