@@ -54,7 +54,7 @@ except ImportError:
 # ── HTTP Server ────────────────────────────────────────────────────────────────
 
 SERVER_DIR   = Path(__file__).parent
-SAVES_DIR    = SERVER_DIR / 'saves'
+SAVES_DIR    = Path(os.environ.get('BGBOARD_SAVES_DIR', str(SERVER_DIR / 'saves')))
 USAGE_FILE   = SERVER_DIR / 'usage_counter.json'
 PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
