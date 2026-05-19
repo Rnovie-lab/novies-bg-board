@@ -96,9 +96,10 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .day-hdr-left{display:flex;align-items:center;gap:12px}
 .day-label{font-size:15px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1.2px}
 .day-date-str{font-size:12px;color:rgba(255,255,255,0.7);font-weight:400}
-.day-date-input{font-size:11px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.85);border-radius:3px;padding:2px 5px;cursor:pointer;font-family:inherit}
-.day-date-input:hover{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.3)}
-.day-date-input::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer}
+.day-date-edit{position:relative;display:inline-flex;align-items:center;font-size:12px;color:rgba(255,255,255,0.75);font-weight:400;cursor:pointer;padding:2px 6px;border-radius:3px;border:1px dashed transparent;transition:background 0.12s,border-color 0.12s}
+.day-date-edit:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.25);color:rgba(255,255,255,0.95)}
+.day-date-edit.empty{color:rgba(255,255,255,0.5);font-style:italic;border-color:rgba(255,255,255,0.15)}
+.day-date-edit input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;color-scheme:dark}
 .bd-totals-strip{display:flex;flex-wrap:wrap;gap:18px;padding:10px 16px;background:var(--bg-el);border:1px solid var(--brd);border-radius:6px;margin-bottom:14px}
 .bd-tot{display:flex;align-items:baseline;gap:6px;font-size:13px}
 .bd-tot strong{font-size:18px;font-weight:800}
@@ -1036,8 +1037,10 @@ function renderBreakdown(){
         <div class="day-hdr-left">
           <span id="day-tog-${day.id}" style="color:#fff;font-size:11px;width:16px">${expanded?'▼':'▶'}</span>
           <span class="day-label">Day ${day.dayNumber}</span>
-          ${day.date?`<span class="day-date-str">${fmtDate(day.date)}</span>`:''}
-          <input type="date" class="day-date-input" value="${day.date||''}" onclick="event.stopPropagation()" onchange="setDayDate('${day.id}', this.value)" title="${day.date?'Edit date':'Set date'}">
+          <label class="day-date-edit ${day.date?'':'empty'}" onclick="event.stopPropagation()" title="${day.date?'Click to change date':'Click to set date'}">
+            ${day.date?fmtDate(day.date):'+ Set date'}
+            <input type="date" value="${day.date||''}" onchange="setDayDate('${day.id}', this.value)">
+          </label>
         </div>
         <div class="day-stats">
           <span class="day-stat">SI: <strong>${stats.siCount}</strong></span>
