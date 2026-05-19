@@ -1226,7 +1226,10 @@ function renderExport(){
 
   return `
   <div class="print-hdr-block">
-    <div class="print-show-title">${s.episode?esc(s.episode)+' ':''} Extras Breakdown</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px">
+      <div class="print-show-title" style="flex:1">${s.episode?esc(s.episode)+' ':''} Extras Breakdown</div>
+      ${state.days.length?`<button class="btn btn-primary print-hide" style="white-space:nowrap" onclick="downloadPDF()" title="Saves directly to your Downloads folder">📥 Download PDF</button>`:''}
+    </div>
     <div class="print-meta" style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
       <span>${s.name?`<strong>Show:</strong> ${esc(s.name)} &nbsp;|&nbsp; <strong>Version:</strong> ${esc(s.version||'—')}`:''}</span>
       ${s.preparedBy?`<span><strong>Prepared by:</strong> ${esc(s.preparedBy)}${s.role?' · '+esc(s.role):''}</span>`:''}
@@ -1246,11 +1249,7 @@ function renderExport(){
         <div class="grand-item"><div class="glbl">Total BG + SI</div><div class="gval" style="color:#2a7fc4">${gSI+gSAG+gNU}</div></div>
       </div>
       ${(state.show.showCost!==false)?`<div style="font-size:13px;color:var(--t4)">Estimated Total Cost: <strong style="color:#52b788;font-size:16px">${$m(gCost)}</strong></div>`:''}
-    </div>`:'';return `${tp==='top'?block:''}${dayBlocks}${tp==='bottom'?block:''}`;})()}
-  <div style="text-align:center;margin-top:22px" class="print-hide">
-    <button class="btn btn-primary" style="font-size:15px;padding:11px 28px" onclick="downloadPDF()">📥 Download PDF</button>
-    <div style="font-size:12px;color:var(--tmut);margin-top:8px">Saves directly to your Downloads folder — works in every browser</div>
-  </div>`;
+    </div>`:'';return `${tp==='top'?block:''}${dayBlocks}${tp==='bottom'?block:''}`;})()}`;
 }
 
 // ══════════════════════════════════════════════════════════
