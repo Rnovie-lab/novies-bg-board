@@ -1081,7 +1081,7 @@ function renderBreakdown(){
   const tp=getTotalsPos();
   const totalsStrip=state.days.length?`
     <div class="bd-totals-strip">
-      <span class="bd-totals-label">Project Total</span>
+      <span class="bd-totals-label">Project Totals</span>
       <span class="bd-tot"><span class="bd-tot-lbl">Stand-Ins</span><strong style="color:#52b788">${gSI}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">SAG</span><strong style="color:#457b9d">${gSAG}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">Non-Union</span><strong style="color:#9b72cf">${gNU}</strong></span>
@@ -1236,7 +1236,7 @@ function renderExport(){
   ${(()=>{const tp=getTotalsPos();const block=state.days.length?`
     <div class="grand-totals">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tlbl)">Project Total</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--tlbl)">Project Totals</div>
         <button class="bd-totals-toggle print-hide" onclick="toggleTotalsPos()" title="Move totals to ${tp==='top'?'bottom':'top'}">${tp==='top'?'↓':'↑'}</button>
       </div>
       <div class="grand-grid">
@@ -1299,7 +1299,7 @@ function downloadPDF(){
     doc.setFillColor(248,248,248).rect(M, cursorY, pageW-2*M, 60, 'F');
     doc.setDrawColor(170).setLineWidth(0.5).rect(M, cursorY, pageW-2*M, 60, 'S');
     doc.setFont('helvetica','bold').setFontSize(9).setTextColor(120);
-    doc.text('PROJECT TOTAL', M+10, cursorY+14);
+    doc.text('PROJECT TOTALS', M+10, cursorY+14);
     const cells = [
       ['Stand-Ins', String(gSI), [82,183,136]],
       ['SAG Background', String(gSAG), [69,123,157]],
@@ -1409,7 +1409,7 @@ function downloadPDF(){
     cursorY += 26;
   });
 
-  // ── Project Total block (drawn at bottom if position == 'bottom') ──
+  // ── Project Totals block (drawn at bottom if position == 'bottom') ──
   if(tp === 'bottom') drawGrandTotals();
 
   // ── Filename: show + episode + date ───────────────────────
