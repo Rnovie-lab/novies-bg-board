@@ -2839,19 +2839,26 @@ async function bootstrap(){
     return;
   }
 
-  // Dynamic-load the Clerk JS SDK from the tenant's frontend-API domain
-  // (domain is base64-encoded in the publishable key after the second '_')
+  // Dynamic-load the Clerk JS SDK from the tenant's frontend-API domain.
+  // Using clerk.browser.js (auto-init variant): we pass the publishable key
+  // via the data-clerk-publishable-key attribute, and after load Clerk
+  // exposes itself on window.Clerk as a ready-to-use INSTANCE (not a
+  // constructor). Domain is base64-encoded in the publishable key after
+  // the second '_'.
   const clerkDomain = atob(pk.split('_')[2]).replace(/\$+$/,'');
   await new Promise((resolve,reject)=>{
     const s=document.createElement('script');
     s.src=`https://${clerkDomain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
     s.async=true; s.crossOrigin='anonymous';
+    s.setAttribute('data-clerk-publishable-key', pk);
     s.onload=resolve;
     s.onerror=()=>reject(new Error('Clerk SDK failed to load — check Clerk domain in publishable key'));
     document.head.appendChild(s);
   });
 
-  const clerk = new window.Clerk(pk);
+  // Auto-init exposes window.Clerk as an instance. Await load() to ensure
+  // it's hydrated before we read clerk.user / clerk.session.
+  const clerk = window.Clerk;
   await clerk.load();
   window.__clerk = clerk;
 
