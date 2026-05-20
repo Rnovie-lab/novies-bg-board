@@ -1218,7 +1218,7 @@ function renderBreakdown(){
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
-    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><span style="font-size:13px;color:var(--tmut)">Head to <strong>Setup</strong> to import a shooting schedule, or click <strong>+ Add Shooting Day</strong> above to add days manually.</span></div>`:''}
+    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><button class="btn btn-primary" onclick="currentTab='setup'; render();">← Go to Setup</button><div style="font-size:12px;color:var(--tmut);margin-top:14px">…or use <strong>+ Add Shooting Day</strong> above to add days manually</div></div>`:''}
     ${tp==='top'?totalsStrip:''}
     ${dayBlocks}
     ${tp==='bottom'?totalsStrip:''}
