@@ -754,12 +754,17 @@ def assemble_schedule(rows, column_mode=False):
         else:
             evt_type, evt_data = classify_row(s)
             # Sequential mode: some schedulers put dates in the right column
-            # (past x=310). If a day_end or day_start lacks a date, try the
-            # full row text.
-            if evt_type in ('day_end', 'day_start') and not evt_data.get('date_text'):
-                _, full_data = classify_row(full_row)
-                if full_data.get('date_text'):
-                    evt_data['date_text'] = full_data['date_text']
+            # (past x=310), so the left-column capture sees only a partial
+            # date like "Monday," — truthy but unparseable. Fall back to the
+            # full row whenever the current date_text doesn't parse to a
+            # real YYYY-MM-DD.
+            if evt_type in ('day_end', 'day_start'):
+                current_dt = evt_data.get('date_text', '')
+                if not current_dt or not parse_date(current_dt):
+                    _, full_data = classify_row(full_row)
+                    full_dt = full_data.get('date_text', '')
+                    if full_dt and parse_date(full_dt):
+                        evt_data['date_text'] = full_dt
 
         # Accumulate show metadata from early content rows
         if meta_rows_seen < 20 and evt_type in ('content', 'noise'):

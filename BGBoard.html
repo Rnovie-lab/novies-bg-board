@@ -45,7 +45,7 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 /* NAV */
 #nav{background:var(--bg-nav);border-bottom:2px solid #2a7fc4;display:flex;align-items:center;padding:0 28px;height:78px;gap:0;position:sticky;top:0;z-index:50}
 .nav-brand{display:flex;align-items:center;margin-right:16px;flex-shrink:0}
-.nav-tabs{display:flex;gap:2px;flex:1}
+.nav-tabs{display:flex;gap:2px;flex:1;justify-content:center}
 .nav-tab{padding:8px 16px;border-radius:4px;font-size:12px;font-weight:700;color:var(--tmut);background:transparent;letter-spacing:0.8px;text-transform:uppercase;border:none;cursor:pointer;transition:color 0.15s}
 .nav-tab:hover{color:var(--t3);background:var(--bg-hov)}
 .nav-tab.active{color:#2a7fc4;background:var(--bg-hov)}
@@ -286,23 +286,42 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 /* THEME TOGGLE */
 .theme-toggle{background:transparent;border:1px solid var(--br);border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--tmut);cursor:pointer;letter-spacing:0.05em;transition:color 0.15s,background 0.15s,border-color 0.15s}
 .theme-toggle:hover{color:var(--t1);background:var(--bg-hov)}
+/* DASHBOARD (Phase 2.1) */
+.dashboard{max-width:1240px;margin:0 auto;padding:24px 20px}
+.dashboard-hdr{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.dashboard-title{font-size:24px;font-weight:800;color:var(--t1);letter-spacing:-0.01em}
+.dashboard-sub{font-size:13px;color:var(--tmut);margin-top:2px}
+.dashboard-search{flex:1;min-width:200px;max-width:320px;padding:8px 12px;background:var(--bg-el);border:1px solid var(--brd);border-radius:5px;color:var(--t1);font-size:13px;font-family:inherit}
+.dashboard-search:focus{outline:none;border-color:#2a7fc4}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.dashboard-empty{grid-column:1/-1;padding:42px 20px;text-align:center;color:var(--tmut);font-style:italic;background:var(--bg-el);border:1px dashed var(--brd);border-radius:8px}
+.project-card{background:var(--bg-card);border:1px solid var(--brd);border-radius:8px;padding:16px 16px 44px 16px;cursor:pointer;transition:border-color 0.15s,transform 0.12s,box-shadow 0.15s;position:relative}
+.project-card:hover{border-color:#2a7fc4;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.18)}
+.project-card-name{font-size:15px;font-weight:700;color:var(--t1);margin-bottom:4px;word-break:break-word;line-height:1.3}
+.project-card-sub{font-size:12px;color:var(--tmut);margin-bottom:12px;min-height:14px}
+.project-card-stats{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--tfnt);align-items:center}
+.project-card-stats .sep{color:var(--brd)}
+.project-card-trash{position:absolute;bottom:10px;left:10px;background:transparent;border:none;color:var(--tmut);cursor:pointer;padding:4px 8px;border-radius:3px;font-size:14px;line-height:1}
+.project-card-trash:hover{color:#e63946;background:rgba(230,57,70,0.1)}
+.beta-pill{font-size:10px;font-weight:700;letter-spacing:0.08em;color:#2a7fc4;background:rgba(42,127,196,0.1);padding:2px 7px;border-radius:3px;line-height:1.4;white-space:nowrap;align-self:center;pointer-events:none;user-select:none}
 </style>
 </head>
 <body>
 <div id="nav">
-  <div class="nav-brand"><img src="bgboard-logo.png" alt="Novie's BG Board" style="height:100px;display:block;border-radius:8px"></div>
-  <button class="btn btn-secondary btn-sm" onclick="openSavesPanel()" title="View saved projects · start a new episode" style="margin-right:12px">📂 Projects</button>
+  <div class="nav-brand" style="display:flex;align-items:center;gap:6px">
+    <img src="bgboard-logo.png" alt="Novie's BG Board" style="height:100px;display:block;border-radius:8px">
+    <span class="beta-pill">BETA</span>
+  </div>
   <div class="nav-tabs">
+    <button class="nav-tab" data-tab="dashboard">Projects</button>
     <button class="nav-tab" data-tab="setup">Setup</button>
     <button class="nav-tab" data-tab="breakdown">Breakdown</button>
     <button class="nav-tab" data-tab="export">Export</button>
   </div>
-  <button class="btn btn-secondary btn-sm" onclick="reportIssue()" title="Report a problem to the developer" style="margin:0 12px;color:#c05050;border-color:rgba(192,80,80,0.4)">⚑ Report Issue</button>
   <div class="nav-actions">
-    <label class="btn btn-primary btn-sm" id="pdf-import-btn" style="cursor:pointer" title="Import a scheduling PDF"><span id="pdf-import-label">↓ Import PDF</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label>
-    <button class="btn btn-secondary btn-sm" onclick="openSaveAs()" title="Save current breakdown">💾 Save</button>
-    <button class="btn btn-secondary btn-sm" onclick="resetAll()" title="Wipe the current in-progress board · saved projects are not affected">Delete</button>
+    <button class="btn btn-primary btn-sm" onclick="newEpisode()" title="Start a new project · current work is auto-saved first">+ New Project</button>
   </div>
+  <button class="btn btn-secondary btn-sm" onclick="reportIssue()" title="Report a problem to the developer" style="margin:0 12px;color:#c05050;border-color:rgba(192,80,80,0.4)">⚑ Report Issue</button>
   <div class="nav-show-info" id="nav-info"></div>
   <div id="clerk-user-btn" style="margin-left:12px;min-width:32px;display:flex;align-items:center"></div>
 </div>
@@ -385,7 +404,7 @@ const OLD_DEFAULT_RATES_v1 = {sag:182, sag_hi:120, nonunion:160, standin:214};
 // ══════════════════════════════════════════════════════════
 function defaultState(){
   return {
-    show:{name:'',episode:'',version:'1',preparedBy:'',role:'',contractType:'tv',sagMin:25,isSeries:false},
+    show:{name:'',episode:'',version:'1',preparedBy:'',role:'',contractType:'tv',sagMin:25,isSeries:false,defaultRates:{...DEFAULT_RATES_FACTORY}},
     standins:[],
     days:[],
     boneyard:[]
@@ -403,12 +422,47 @@ if(!state.show.defaultRates) state.show.defaultRates={...DEFAULT_RATES_FACTORY};
 else if(JSON.stringify(state.show.defaultRates)===JSON.stringify(OLD_DEFAULT_RATES_v1))
   state.show.defaultRates={...DEFAULT_RATES_FACTORY};
 
-let currentTab='breakdown';
+let currentTab='dashboard';
 let expandedDays={};
 // Active save tracking
 let _saveId=null, _saveName=null;
 
-function save(){try{localStorage.setItem('bgboard',JSON.stringify(state));}catch(e){}}
+function save(){
+  try{localStorage.setItem('bgboard',JSON.stringify(state));}catch(e){}
+  _scheduleAutosave();
+}
+// ── Autosave (Phase 2.1) ────────────────────────────────────
+// Debounce every state mutation into a single server-side save 1.5s after
+// the last change. Replaces the manual Save button.
+let _autosaveTimer=null;
+let _saveIndicatorTimer=null;
+function _scheduleAutosave(){
+  if(_skipAutosave) return;
+  if(_autosaveTimer) clearTimeout(_autosaveTimer);
+  _autosaveTimer=setTimeout(async ()=>{
+    _autosaveTimer=null;
+    if(!_hasSubstance || typeof _hasSubstance!=='function' || !_hasSubstance()) return;
+    _updateSaveIndicator('saving');
+    const id=await _autoSaveCurrent();
+    _updateSaveIndicator(id?'saved':'failed');
+  },1500);
+}
+let _skipAutosave=false;  // set true during loadSave/import to avoid double-saving incoming state
+function _updateSaveIndicator(stateLabel){
+  const el=document.getElementById('nav-info');
+  if(!el) return;
+  if(_saveIndicatorTimer){clearTimeout(_saveIndicatorTimer);_saveIndicatorTimer=null;}
+  const styles={
+    saving:'color:var(--tmut);font-style:italic',
+    saved:'color:#52b788',
+    failed:'color:#e63946'
+  };
+  const labels={saving:'Saving…',saved:'✓ Saved',failed:'Save failed'};
+  el.innerHTML=`<span style="font-size:11px;${styles[stateLabel]||''}">${labels[stateLabel]||''}</span>`;
+  if(stateLabel==='saved'){
+    _saveIndicatorTimer=setTimeout(()=>{ if(el) el.innerHTML=''; },1800);
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 // UTILS
@@ -546,18 +600,97 @@ function sagMinWarning(day,stats){
 function render(){
   updateNavInfo(); updateNavTabs();
   document.getElementById('main').innerHTML=
-    currentTab==='setup'?renderSetup():currentTab==='breakdown'?renderBreakdown():renderExport();
+    currentTab==='dashboard'?renderDashboard()
+    :currentTab==='setup'?renderSetup()
+    :currentTab==='breakdown'?renderBreakdown()
+    :renderExport();
   attachDayToggles();
   const footer=document.getElementById('app-footer');
   if(footer) footer.style.display=currentTab==='setup'?'flex':'none';
 }
 
+// ══════════════════════════════════════════════════════════
+// DASHBOARD (Phase 2.1) — landing page after sign-in, lists all projects
+// as cards. Existing /saves endpoint is the data source.
+// ══════════════════════════════════════════════════════════
+let _dashboardSaves=[];
+let _dashboardFilter='';
+function renderDashboard(){
+  // Kick off async fetch — the placeholder below shows while we wait
+  setTimeout(_refreshDashboard,0);
+  return `
+    <div class="dashboard">
+      <div class="dashboard-hdr">
+        <div>
+          <div class="dashboard-title">Projects</div>
+          <div class="dashboard-sub">Pick up where you left off, or start something new.</div>
+        </div>
+        <input type="text" class="dashboard-search" id="dashboard-search" placeholder="Filter by name…" value="${esc(_dashboardFilter)}" oninput="_filterDashboard(this.value)">
+      </div>
+      <div id="dashboard-grid" class="dashboard-grid">
+        <div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--tmut)">Loading projects…</div>
+      </div>
+    </div>`;
+}
+async function _refreshDashboard(){
+  try{
+    const res=await fetch('/saves');
+    const j=await res.json();
+    _dashboardSaves=j.saves||[];
+    _redrawDashboardCards();
+  }catch(e){
+    const grid=document.getElementById('dashboard-grid');
+    if(grid) grid.innerHTML=`<div style="grid-column:1/-1;color:#e63946;padding:20px">Could not load projects: ${esc(e.message)}</div>`;
+  }
+}
+function _redrawDashboardCards(){
+  const grid=document.getElementById('dashboard-grid');
+  if(!grid) return;
+  const f=_dashboardFilter.toLowerCase();
+  const filtered=f?_dashboardSaves.filter(s=>(s.name||'').toLowerCase().includes(f)):_dashboardSaves;
+  if(filtered.length===0){
+    grid.innerHTML=`<div class="dashboard-empty">${f?`No projects match "${esc(_dashboardFilter)}"`:'No projects yet. Click "+ New Project" to start.'}</div>`;
+    return;
+  }
+  grid.innerHTML=filtered.map(sv=>{
+    const show=sv.show||{};
+    const subtitle=[show.name,show.episode?'Ep '+show.episode:''].filter(Boolean).join(' · ');
+    const date=sv.savedAt?new Date(sv.savedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+    const stats=`${sv.dayCount||0} day${sv.dayCount!==1?'s':''} · ${sv.roleCount||0} BG`;
+    return `<div class="project-card" onclick="_openFromDashboard('${sv.id}')">
+      <button class="project-card-trash" onclick="event.stopPropagation();_deleteFromDashboard('${sv.id}','${esc(sv.name).replace(/'/g,"\\'")}')" title="Delete project">🗑</button>
+      <div class="project-card-name">${esc(sv.name||'Untitled')}</div>
+      <div class="project-card-sub">${esc(subtitle||'no show info')}</div>
+      <div class="project-card-stats"><span>${stats}</span>${date?`<span class="sep">·</span><span>${date}</span>`:''}</div>
+    </div>`;
+  }).join('');
+}
+function _filterDashboard(val){ _dashboardFilter=val||''; _redrawDashboardCards(); }
+async function _openFromDashboard(id){
+  await loadSave(id);
+  currentTab='breakdown';
+  render();
+}
+async function _deleteFromDashboard(id,name){
+  if(!confirm(`Delete "${name}"? This can't be undone.`)) return;
+  try{
+    await fetch(`/saves/${id}`,{method:'DELETE'});
+    await _refreshDashboard();
+  }catch(e){
+    alert('Delete failed: '+e.message);
+  }
+}
+async function goToDashboard(){
+  try{ await _autoSaveCurrent(); }catch(e){}
+  currentTab='dashboard';
+  render();
+}
+
 function updateNavInfo(){
-  const el=document.getElementById('nav-info');
-  const savePart=_saveName
-    ?`<span style="color:#3a7bd5;font-weight:700">${esc(_saveName)}</span>`
-    :'<span style="color:var(--tfnt);font-style:italic">unsaved</span>';
-  el.innerHTML=`<span style="font-size:12px">${savePart}</span>`;
+  // Phase 2.1: the show-name display in the nav was removed per Ross's
+  // feedback. The #nav-info element is now reused as the autosave status
+  // indicator (managed by _updateSaveIndicator). Leaving this as a no-op
+  // so any leftover callers don't clobber the indicator.
 }
 function updateNavTabs(){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===currentTab));
@@ -734,24 +867,7 @@ function renderSetup(){
 
   const roleOpts=['','1st AD','2nd AD','2nd 2nd AD','UPM'].map(r=>`<option value="${r}" ${(s.role||'')==r?'selected':''}>${r||'— select —'}</option>`).join('');
 
-  // When there are no shooting days yet, surface the two paths forward at
-  // the top of Setup so the user isn't stuck wondering what to do next.
-  const startBlock = state.days.length===0 ? `
-  <div class="card setup-card" style="background:var(--bg-el);border:1px dashed var(--br3)">
-    <div class="card-title"><span><span class="accent">◆</span> Get Started</span></div>
-    <div style="font-size:13px;color:var(--t2);margin-bottom:10px">Fill in show info below, then pick a path:</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <label class="btn btn-primary btn-sm" style="cursor:pointer">
-        <span>↓ Import a Shooting Schedule (PDF)</span>
-        <input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)">
-      </label>
-      <button class="btn btn-secondary btn-sm" onclick="startBlankBreakdown()">+ Start a Blank Breakdown</button>
-    </div>
-    <div style="font-size:11px;color:var(--tmut);margin-top:8px">Show name &amp; episode you enter here are preserved when you import.</div>
-  </div>` : '';
-
   return `
-  ${startBlock}
   <div class="card setup-card">
     <div class="card-title"><span><span class="accent">◆</span> Show Information</span></div>
     <div class="fg g3">
@@ -784,6 +900,12 @@ function renderSetup(){
           <span style="font-size:13px;color:var(--tlbl)">TV Series <span style="color:var(--tmut);font-size:11px">(enables standin carry-over when duplicating episodes)</span></span>
         </label>
       </div>
+    </div>
+    <div style="display:flex;justify-content:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--brd)">
+      <label class="btn btn-primary btn-sm" style="cursor:pointer" title="Import a shooting schedule PDF — you'll be taken straight to Breakdown after">
+        <span>↓ Import Shooting Schedule</span>
+        <input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)">
+      </label>
     </div>
   </div>
 
@@ -1096,7 +1218,7 @@ function renderBreakdown(){
       <button class="btn btn-primary" onclick="document.getElementById('add-day-card').style.display='block';document.getElementById('new-day-num').focus()">+ Add Shooting Day</button>
     </div>
     ${addForm}
-    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><label class="btn btn-primary btn-sm" style="cursor:pointer;margin-top:4px" title="Import a scheduling PDF"><span>↓ Import Shooting Schedule</span><input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)"></label></div>`:''}
+    ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><span style="font-size:13px;color:var(--tmut)">Head to <strong>Setup</strong> to import a shooting schedule, or click <strong>+ Add Shooting Day</strong> above to add days manually.</span></div>`:''}
     ${tp==='top'?totalsStrip:''}
     ${dayBlocks}
     ${tp==='bottom'?totalsStrip:''}
@@ -2218,6 +2340,7 @@ async function loadSave(id){
     // Migrate
     if(!state.show.isSeries) state.show.isSeries=false;
     if(!Array.isArray(state.boneyard)) state.boneyard=[];
+    if(!state.show.defaultRates) state.show.defaultRates={...DEFAULT_RATES_FACTORY};
     save(); expandedDays={}; closeModal(); render(); updateNavInfo();
     showToast(`Loaded: ${_saveName}`);
   }catch(e){ showToast('Load failed — is the server running?','error'); }
@@ -2680,12 +2803,14 @@ async function importPDF(e){
     return;
   }
 
-  // Show spinner
+  // Show spinner (these elements were removed from the nav in Phase 2.1;
+  // null-guard so the import flow doesn't crash when called from the new
+  // Setup-page button).
   const btn=document.getElementById('pdf-import-btn');
   const lbl=document.getElementById('pdf-import-label');
-  const orig=lbl.textContent;
-  lbl.textContent='Parsing… (may take ~1 min for large PDFs)';
-  btn.style.pointerEvents='none';
+  const orig=lbl?lbl.textContent:'';
+  if(lbl) lbl.textContent='Parsing… (may take ~1 min for large PDFs)';
+  if(btn) btn.style.pointerEvents='none';
 
   try{
     // Always use the universal parser (/parse-pdf) — it handles all known
@@ -2736,8 +2861,8 @@ async function importPDF(e){
   }catch(err){
     alert('PDF import failed: '+err.message);
   }finally{
-    lbl.textContent=orig;
-    btn.style.pointerEvents='';
+    if(lbl) lbl.textContent=orig;
+    if(btn) btn.style.pointerEvents='';
   }
 }
 
