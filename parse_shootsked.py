@@ -201,7 +201,13 @@ DAY_END_PATTERNS = [
     # "End of DAY 4 Wednesday April 23, 2025"  (EP one-line)
     (re.compile(r'^End\s+of\s+DAY\s+(\d+)\s+(.*)', re.I),
      lambda m: {'day': int(m.group(1)), 'date_text': m.group(2).strip()}),
-    # "End of Shoot Day" / "End of Day" (generic)
+    # Permissive: "End [of] [Shoot] Day N [tail]" — captures the day number
+    # even when style/punctuation differs from the patterns above. This
+    # catches schedules like the beta user's where "End of Day 19" lacks the
+    # "--" separator and uses mixed case.
+    (re.compile(r'^End\s+(?:of\s+)?(?:Shoot\s+)?Day\s+#?\s*(\d+)\b\s*(.*)', re.I),
+     lambda m: {'day': int(m.group(1)), 'date_text': m.group(2).strip()}),
+    # "End of Shoot Day" / "End of Day" (generic — no day number)
     (re.compile(r'^End\s+(?:of\s+)?(?:Shoot\s+)?Day\b', re.I),
      lambda m: {'day': None, 'date_text': ''}),
     # Extended from bg_terminology.json at load time (see below)
@@ -791,7 +797,18 @@ def assemble_schedule(rows, column_mode=False):
             if current_day is None:
                 # 1-Line schedules: day_end is the ONLY day boundary marker.
                 # Create the day retroactively so pending_scenes get committed.
-                day_n = day_num or (len(days) + 1)
+                # Day number priority:
+                #   1) explicit number from the marker ("End of Day 19")
+                #   2) one past the previous known day (sequential inference)
+                #   3) day 1 (cold start — no prior day, no number)
+                # This fixes schedules that start at Day 19+ where the old code
+                # would dump those scenes onto Day 1.
+                if day_num is not None:
+                    day_n = day_num
+                elif days:
+                    day_n = days[-1]['dayNumber'] + 1
+                else:
+                    day_n = 1
                 current_day = make_day_obj(day_n, date_txt)
             else:
                 if date_txt:

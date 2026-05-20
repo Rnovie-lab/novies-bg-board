@@ -233,6 +233,8 @@ class BGBoardHandler(BaseHTTPRequestHandler):
             self._saves_create()
         elif re.match(r'^/saves/[^/]+/duplicate$', self.path):
             self._saves_duplicate(self.path.split('/')[2])
+        elif re.match(r'^/saves/[^/]+/rename$', self.path):
+            self._saves_rename(self.path.split('/')[2])
         elif self.path == '/usage/increment':
             count = _read_usage() + 1
             _write_usage(count)
@@ -322,6 +324,26 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         f.unlink()
         print(f"  ✓ Deleted save: {save_id}")
         self.send_json({'ok': True})
+
+    def _saves_rename(self, save_id):
+        user_id = self._require_auth()
+        if not user_id: return
+        f = SAVES_DIR / f'{save_id}.json'
+        if not f.exists():
+            self.send_json({'error': 'Not found'}, 404); return
+        data = json.loads(f.read_text())
+        if AUTH_ENABLED and data.get('_userId') != user_id:
+            self.send_json({'error': 'Not found'}, 404); return
+        length = int(self.headers.get('Content-Length', 0))
+        body   = json.loads(self.rfile.read(length)) if length > 0 else {}
+        new_name = (body.get('name') or '').strip()
+        if not new_name:
+            self.send_json({'error': 'name required'}, 400); return
+        old_name = data.get('_saveName', '')
+        data['_saveName'] = new_name
+        f.write_text(json.dumps(data, indent=2))
+        print(f"  ✓ Renamed save {save_id}: '{old_name}' → '{new_name}'")
+        self.send_json({'ok': True, 'name': new_name})
 
     def _saves_duplicate(self, save_id):
         import copy
