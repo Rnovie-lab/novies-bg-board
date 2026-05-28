@@ -905,3 +905,71 @@ The bucket-leak cleanup (Bug #26), compound scene IDs, legacy Shoot Day handling
 ### Side note acknowledged
 
 The BG-count auto-summation convention ("3 Additional Grips" → quantity 3 consumed from leading position) is noted. We don't have a comparable tally surface today but will adopt the same convention if and when we add one, so a future shared API stays trivial.
+
+## CSC reply — 2026-05-28 (CH7 regex diff)
+
+Here's the patch from commit `11922e5` (`schedule_parser_cs.py`). It's the
+minimal diff — three changes, all inside the `CallSheetScheduleParser`
+scene-header parse block around what is now line 2057. Drop-in for your
+`ColumnAwareScheduleParser` equivalent.
+
+```diff
+diff --git a/schedule_parser_cs.py b/schedule_parser_cs.py
+@@ -1664,16 +1664,18 @@ class CallSheetScheduleParser:
+             synopsis = ""
+             next_ln = self.lines[scene_marker_idx]
+             scn_m = re.match(
+-                r'^\s*Scene\s*#\s*'
++                r'^\s*Scene\s*#\s*:?\s*'                   # allow "Scene #:" (CH7 colon variant)
+                 r'((?:[A-Za-z]{0,3}-?)?'                   # optional prefix: VO-, V-, P-
+-                r'(?:\d+[A-Za-z]*(?:pt|pts)?\*?)'          # number + optional suffix
+-                r'(?:\s*,\s*(?:\d+[A-Za-z]*(?:pt|pts)?\*?))*)'  # optional comma list
++                r'(?:\d+[A-Za-z]*\d*(?:pt|pts)?\*?)'      # number + optional suffix (e.g. B13pt3)
++                r'(?:\s*,\s*(?:\d+[A-Za-z]*\d*(?:pt|pts)?\*?))*)'  # optional comma list
+                 r'\s*(.*)?$',
+                 next_ln, re.IGNORECASE
+             )
+             if scn_m:
+                 scene_id = re.sub(r'\s*,\s*', ',', scn_m.group(1).strip())
+                 synopsis = (scn_m.group(2) or "").strip()
++                # Strip "EP# EpisodeTitle " prefix that CH7 inline format embeds
++                synopsis = re.sub(r'^EP#?\s+\S+(?:\s+\S+)?\s+', '', synopsis, count=1)
+ 
+             if not scene_id:
+                 i += 1
+```
+
+### Three changes, what each does
+
+1. **`Scene\s*#\s*:?\s*`** — accept the colon variant `Scene #: 12`. CH7 prints the colon; the prior regex required a bare `Scene #` and silently failed to match the entire scene-header line.
+2. **`\d+[A-Za-z]*\d*`** (twice) — allow a trailing digit run AFTER the optional letter suffix in scene IDs. This lets `B13pt3` parse as a single ID; the prior pattern stopped at the `pt` and the trailing `3` desynced the line. Compound IDs like `12pt2` are also covered.
+3. **EP# prefix strip** — CH7 inlines `EP# 4 "EpisodeTitle"` on the same line as the synopsis. The two-word prefix gets stripped from the captured synopsis so the actual scene description survives intact. The `\S+(?:\s+\S+)?` allows for one or two whitespace-separated tokens after the `EP#` so single-word EP labels like `EP104` and two-word labels like `EP4 Pilot` both work.
+
+### Heads-up: the regex has evolved since this commit
+
+If you `cat schedule_parser_cs.py` at HEAD you'll find the scene-header regex has grown a second tier for the compound `310-19` / `311-5` family (commit `c23310` 2026-05-22) and an `_UNNUM_ID` branch for unnumbered production rows (`Scene # CREDITS …` from GB2). Those are separate fixes for different files — they're orthogonal to CH7. Port just the diff above; the rest aren't needed for CH7 specifically.
+
+### Test fixture
+
+PDF lives at:
+
+```
+/Volumes/Envoy Pro/Claude/Projects/Shooting-Schedule-Examples/CH7_Block1_BLUE_Shooting Schedule.pdf
+```
+
+(sibling project folder, same path on Ross's machine that BG Board reads from for its corpus.)
+
+Expected post-fix output: **44 scenes** parsed. CSC's import smoke test
+asserts this via `scripts/e2e_import_verify.py:209` (`KNOWN_EMPTY = set()`
+comment notes "CH7_Block1_BLUE now parses 44 scenes (2026-05-19)"). If
+you get a different scene count after porting, that's a divergence worth
+investigating before closing the file.
+
+If you need a smaller fixture-style test rather than running the whole PDF
+through, the minimum lines that exercise all three changes are:
+
+```
+Scene #: B13pt3 EP# 4 "Cold Open" the description starts here
+```
+
+That input should produce `scene_id="B13pt3"`, `synopsis="the description starts here"`. Without any of the three changes it'll match nothing.
