@@ -108,6 +108,8 @@ input,select,textarea{outline:none;font-family:inherit;font-size:14px}
 .bd-tot-cost{margin-left:auto}
 .bd-totals-toggle{margin-left:8px;background:transparent;border:1px solid var(--brd);color:var(--tmut);width:24px;height:24px;border-radius:3px;cursor:pointer;font-size:14px;line-height:1;padding:0}
 .bd-totals-toggle:hover{color:var(--t1);border-color:#2a7fc4}
+.bd-totals-toggle-on{background:#2a7fc4;color:#fff;border-color:#2a7fc4}
+.bd-totals-toggle-on:hover{background:#3a90d4;color:#fff}
 .day-stats{display:flex;gap:18px;align-items:center}
 .day-stat{font-size:11px;color:rgba(255,255,255,0.65);font-weight:600;letter-spacing:0.3px}
 .day-stat strong{color:#fff;font-size:13px}
@@ -571,7 +573,7 @@ function reuseDisplayInfo(role,day){
     const found=findOnDay(role.reuseOf.roleId);
     if(!found) return null; // orphan parent — render nothing
     const ref=found.sc.sceneId?'Sc. '+found.sc.sceneId:('Day '+day.dayNumber);
-    return {explicit:true,label:`${role.reuseOf.count} of ${role.count||1} from ${ref}: ${found.r.type}`};
+    return {explicit:true,label:`${role.reuseOf.count} of ${role.count||1} from ${ref}: ${found.r.type}`,ref};
   }
   // Explicit None — show nothing (user opted out of any reuse display)
   if(role.reuseOf) return null;
@@ -589,7 +591,7 @@ function reuseDisplayInfo(role,day){
   const found=findOnDay(winnerId);
   if(!found) return null;
   const ref=found.sc.sceneId?'Sc. '+found.sc.sceneId:('Day '+day.dayNumber);
-  return {explicit:false,label:`Auto-link: ${ref} ${found.r.type}`};
+  return {explicit:false,label:`Auto-link: ${ref} ${found.r.type}`,ref};
 }
 
 function sagMinWarning(day,stats){
@@ -1187,8 +1189,12 @@ function renderBreakdown(){
       </div>`;
 
     // Scenes — column header row shown once per day (first scene with roles)
+    // Hide-empty toggle filters out scenes with zero roles from this view only.
+    const hideEmpty = getHideEmpty();
+    const visibleScenes = hideEmpty ? day.scenes.filter(sc => (sc.roles||[]).length > 0) : day.scenes;
+    const hiddenSceneCount = day.scenes.length - visibleScenes.length;
     let dayColHdrShown = false;
-    const scenesHTML=day.scenes.map(sc=>{
+    const scenesHTML=visibleScenes.map(sc=>{
       const roles=(sc.roles||[]);
       const roleRows=roles.map(r=>{
         const reuse=reuseDisplayInfo(r,day);
@@ -1236,7 +1242,9 @@ function renderBreakdown(){
           :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG — click to add</td></tr>`}
         </table>
       </div>`;
-    }).join('');
+    }).join('') + (hiddenSceneCount > 0 && visibleScenes.length === 0
+      ? `<div style="padding:14px 18px;font-size:12px;color:var(--tmut);font-style:italic">All ${hiddenSceneCount} scene${hiddenSceneCount===1?'':'s'} hidden — toggle off "Hide empty" to show.</div>`
+      : '');
 
     return `<div class="day-block" data-day-id="${day.id}">
       <div class="day-hdr" data-day-id="${day.id}">
@@ -1291,6 +1299,7 @@ function renderBreakdown(){
       <span class="bd-tot"><span class="bd-tot-lbl">Total BG</span><strong style="color:#e63946">${totalBG}</strong></span>
       <span class="bd-tot"><span class="bd-tot-lbl">Total BG + SI</span><strong style="color:#2a7fc4">${gSI+totalBG}</strong></span>
       ${state.show.showCost!==false?`<span class="bd-tot bd-tot-cost"><span class="bd-tot-lbl">Est. Cost</span><strong style="color:#52b788">${$m(gCost)}</strong></span>`:''}
+      <button class="bd-totals-toggle${getHideEmpty()?' bd-totals-toggle-on':''}" onclick="toggleHideEmpty()" title="${getHideEmpty()?'Show all scenes':'Hide scenes with no BG'}" style="width:auto;padding:0 8px;font-size:11px">${getHideEmpty()?'Show all':'Hide empty'}</button>
       <button class="bd-totals-toggle" onclick="toggleTotalsPos()" title="Move totals to ${tp==='top'?'bottom':'top'}">${tp==='top'?'↓':'↑'}</button>
     </div>`:'';
   return `
@@ -1596,7 +1605,9 @@ async function downloadPDF(){
       (sc.roles||[]).forEach(r => {
         const bumpStr = (r.bumps||[]).map(b => b.label).join(', ') || '—';
         const reuse = reuseDisplayInfo(r, day);
-        const notes = (r.notes||'') + (reuse ? ` [${reuse.label}]` : '');
+        // PDF uses layperson-friendly "Reuse from Sc. X" for auto-links; explicit reuse keeps its detailed label.
+        const reuseNote = reuse ? (reuse.explicit ? reuse.label : `Reuse from ${reuse.ref}`) : '';
+        const notes = (r.notes||'') + (reuseNote ? ` [${reuseNote}]` : '');
         body.push([
           {content:String(r.count||1) + (r.minors?' (m)':''), styles:{halign:'center'}},
           r.type||'',
@@ -1669,6 +1680,8 @@ function deleteDay(id){if(!confirm('Delete this day and all scenes?'))return;sta
 function setDayDate(id,val){const d=state.days.find(x=>x.id===id);if(!d)return;d.date=val||'';save();render();}
 function getTotalsPos(){return (state.preferences&&state.preferences.totalsPosition)||'top';}
 function toggleTotalsPos(){state.preferences=state.preferences||{};state.preferences.totalsPosition=getTotalsPos()==='top'?'bottom':'top';save();render();}
+function getHideEmpty(){return !!(state.preferences&&state.preferences.hideEmptyScenes);}
+function toggleHideEmpty(){state.preferences=state.preferences||{};state.preferences.hideEmptyScenes=!getHideEmpty();save();render();}
 function deleteScene(dayId,sceneId){if(!confirm('Delete this scene?'))return;const d=state.days.find(x=>x.id===dayId);if(d)d.scenes=d.scenes.filter(s=>s.id!==sceneId);save();render();}
 function deleteRole(dayId,sceneId,roleId){const d=state.days.find(x=>x.id===dayId);const s=d?.scenes.find(x=>x.id===sceneId);if(s)s.roles=(s.roles||[]).filter(r=>r.id!==roleId);save();render();}
 
