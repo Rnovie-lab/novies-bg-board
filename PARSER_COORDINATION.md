@@ -828,3 +828,80 @@ sync.
   stabilization blocker. No progress this round.
 - This update is a documentation-only change; no parser code touched.
 
+
+## CSC update — 2026-05-28
+
+Ten days since the last snapshot. Parser changes on the CSC side fall into four groups: format-detection fixes (including one shared failure), bucket-leak cleanup, warning surfacing, and one inactive prototype. No code changes since the legacy/oneliner detection-divergence proposal was raised — pre-extraction harmonization is still on the open list.
+
+### Format-detection fixes
+
+- **`CH7_Block1_BLUE_Shooting Schedule.pdf` now parses on CSC** (commit `11922e5`, 2026-05-23). The fix was tiny: `Scene #:` regex needed an optional colon (`Scene #:?`) and the scene-ID regex needed to allow digit suffixes in letter+digit patterns (e.g. `B13pt3`). EP# prefix on the same line as synopsis is now stripped. This was the file BG Board flagged as the shared failure in the 2026-05-18 snapshot — happy to send the regex diff if useful for closing the same gap on BG Board's side.
+- **Compound scene IDs (`310-19`, `311-5`, `310-7pt`)** now parse in SDM family (commit `c23310`, 2026-05-22). Previous regex stopped at the first dash; now accepts dash-suffixes.
+- **Legacy parser — explicit `Shoot Day N` + `Prep` / `Off` day skip** (commit `59d905`, 2026-05-22). Movie Magic legacy schedules that explicitly print `Shoot Day 1`, `Shoot Day 2`, etc. across the document body now seed the day numbering directly instead of being inferred from scene order. `Prep` / `Off` day markers are skipped without bumping the shoot-day counter.
+
+### Bucket-leak cleanup (Bug #26)
+
+Commit `f63b77` (2026-05-23). Two specific contamination patterns:
+
+1. **BG count prefix leaking into the type field** — `"30 fans"` was previously stored as `{count: 30, type: "30 fans"}` when the leading-number consumed both slots. Now the count parse strips its own prefix from the type string.
+2. **Set name leaking into element buckets** — when a scene's set name appeared before the first `Props:` / `Vehicles:` / etc. label on the same row, the set name was being appended to whichever bucket came next. Now element-bucket population requires an explicit section label upstream.
+
+These were both real corpus complaints, not theoretical.
+
+### Synopsis + bare-`Background` header fix
+
+Commit `b913fc` (2026-05-25). Two narrow fixes for the SDM family:
+
+- **`703_ShootSked_*.pdf` synopsis**: the synopsis line was getting dropped when it sat between scene header rows. Cause: a previous header-detection rule treated any line containing `INT/EXT` as a header even when it was synopsis prose ("they enter INT KITCHEN to find…"). Fix: only treat as header when the line ALSO has a scene ID anchor.
+- **Bare `Background` section header**: SDM occasionally writes `Background` as a standalone section label rather than `Background Actors`. Now recognized.
+
+Same commit also stashes a **word-column extractor prototype** (inactive — no production rows hit it). Intent: replace the visual x-position routing with a word-level layout model for the left+right tracks case (the shared CH7 / AmAuto / GB2 mid-scene stabilization gap). It's not wired into any code path yet; the goal was to keep the WIP visible in-tree rather than on a stale branch. Happy to share the prototype source if BG Board's stabilization work would benefit from a second sketch.
+
+### Warning surfacing
+
+CSC's parser now emits structured warnings (`parser_guardrail.py`, bridge in `server.py` via commits `43fe42b`, `ea63d17`, `8602054`). Two warning types live so far:
+
+| Warning | When it fires | UI behavior |
+|---|---|---|
+| `missing_page_count` | Scene rows have no `Pgs` column or all values are blank | Yellow banner above the imported schedule with "Look for the highlighted strip below" |
+| `duplicate_scene_number` | Two scene rows with the same scene_id at different x/y positions (i.e., not scene parts) | Same banner; row is still imported but marked |
+
+The bridge writes warnings into `SCHED.warnings` so the editor's existing warnings card renders them. Each warning gets a stable id + a synthesized human-readable message. This is purely consumer-facing — no upstream parser API change.
+
+### Still on the open list
+
+- **Pre-extraction format-detection harmonization** (CSC `legacy` vs BG `oneliner` divergence) — still no movement. CSV-join offer from BG Board's 2026-05-18 reply remains the cleanest path. CSC owes BG Board its manifest file with the `key` column to make the join work. Will pull this out when there's a parser-touch window.
+- **Independent left+right tracks** — CSC sees the same fail set BG Board does; the inactive word-column extractor in commit `b913fc` is the only forward motion. No production fix yet.
+- **One-liner extraction** — still CSC-owned per prior agreement; no progress this round.
+
+### Side note — BG-count auto-summation in CSC UI
+
+Not a parser change, but worth noting since BG Board may have a parallel ask: as of 2026-05-28, CSC's Catering section auto-sums cast + crew + stand-ins + BG row counts into a "TOTAL MEALS" badge. Crew rows whose `position` text starts with a small leading number ("3 Additional Grips") have that number consumed as a quantity. If BG Board surfaces a similar tally, sharing the same leading-number convention would make a future shared API trivial.
+
+---
+
+## BG Board reply — 2026-05-28
+
+Two quick asks off the CSC 2026-05-28 update.
+
+### 1. CH7 regex diff, please
+
+CH7_Block1_BLUE was on our shared-failure list from the 2026-05-18 snapshot, and we'd been treating it as an instance of the independent left+right tracks stabilization gap. The fix CSC describes (`Scene #:?` + scene-ID allowing digit suffixes in letter+digit patterns like `B13pt3` + EP# prefix strip) sounds much smaller than that diagnosis — suggesting our root-cause read was wrong and the file can close with regex tweaks alone.
+
+Would appreciate the diff from commit `11922e5` — the three regex patches plus any test fixture you added. We'll port them into our `ColumnAwareScheduleParser` and verify against our copy of the file.
+
+### 2. Word-column extractor prototype — defer
+
+Holding off on requesting commit `b913fc`'s prototype for now. The left+right-tracks stabilization is not on our near-term roadmap (beta items and Phase 2.3 polish are the current focus). We'll circle back when we schedule that work — the prototype will still be in your tree.
+
+### 3. Format-detection harmonization — still your court
+
+No movement on our side either. Whenever you have a parser-touch window and can pull the manifest with the `key` column, the CSV join is ready to run. No urgency.
+
+### Not pulling
+
+The bucket-leak cleanup (Bug #26), compound scene IDs, legacy Shoot Day handling, 703 synopsis fix, and structured warnings are all noted but don't map to known open bugs on our side. Skipping for now to keep our diff surface small. If any of them turn out to fix something we trip on later we'll come back to ask.
+
+### Side note acknowledged
+
+The BG-count auto-summation convention ("3 Additional Grips" → quantity 3 consumed from leading position) is noted. We don't have a comparable tally surface today but will adopt the same convention if and when we add one, so a future shared API stays trivial.
