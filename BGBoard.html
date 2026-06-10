@@ -148,6 +148,8 @@ tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10
 .roles-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;margin-bottom:0}
 .roles-table colgroup .col-sel{width:30px}
 .role-sel{cursor:pointer;accent-color:#2a7fc4}
+.sel-float-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--bg-card,#fff);border:1px solid var(--br);border-radius:24px;box-shadow:0 6px 24px rgba(0,0,0,0.25);font-size:13px;font-weight:600;color:var(--t2);animation:selbar-in 0.15s ease-out}
+@keyframes selbar-in{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .roles-table colgroup .col-edit{width:36px}
 .roles-table colgroup .col-count{width:44px}
 .roles-table colgroup .col-type{width:28%}
@@ -426,6 +428,7 @@ if(state.show.sagMin===undefined) state.show.sagMin=25;
 if(state.show.role===undefined) state.show.role='';
 if(state.show.isSeries===undefined) state.show.isSeries=false;
 if(state.show.showCost===undefined) state.show.showCost=true;
+if(state.show.showRates===undefined) state.show.showRates=true;
 if(!Array.isArray(state.boneyard)) state.boneyard=[];
 if(!state.show.defaultRates) state.show.defaultRates={...DEFAULT_RATES_FACTORY};
 else if(JSON.stringify(state.show.defaultRates)===JSON.stringify(OLD_DEFAULT_RATES_v1))
@@ -1020,8 +1023,12 @@ function renderSetup(){
   <div class="card setup-card" style="margin-top:18px">
     <div class="card-title"><span><span class="accent">◆</span> Preferences</span></div>
     <label class="cb-row">
+      <input type="checkbox" ${s.showRates!==false?'checked':''} onchange="updateShow('showRates',this.checked)">
+      Show rates — per-role &amp; stand-in rate column in the Breakdown, Export page, and PDF
+    </label>
+    <label class="cb-row">
       <input type="checkbox" ${s.showCost!==false?'checked':''} onchange="updateShow('showCost',this.checked)">
-      Show rates &amp; estimated costs — uncheck to hide all $ from the Breakdown, Export page, and PDF
+      Show estimated costs — day and project cost totals on screen and in the PDF
     </label>
     <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--br)">
       <span style="font-size:13px;color:var(--tlbl)">Appearance</span>
@@ -1164,7 +1171,7 @@ function renderBreakdown(){
           return `<div class="si-day-row">
             <span class="si-day-name">${esc(si.name)}</span>
             <span class="si-day-char">${esc(si.character)}</span>
-            <span style="font-size:11px;color:var(--tmut)">${state.show.showCost!==false?`$${si.rate}/8`:''}</span>
+            <span style="font-size:11px;color:var(--tmut)">${state.show.showRates!==false?`$${si.rate}/8`:''}</span>
             <label class="si-off-toggle">
               <input type="checkbox" ${off?'':'checked'} onchange="toggleSIOff('${day.id}','${si.id}',!this.checked)">
               Working
@@ -1179,7 +1186,7 @@ function renderBreakdown(){
           <div class="si-day-row" style="grid-template-columns:160px 1fr 70px 90px 52px 26px">
             <span class="si-day-name">${esc(si.name)}<span class="badge-day-si">DAY</span></span>
             <span class="si-day-char">${esc(si.character||'—')}</span>
-            <span style="font-size:11px;color:var(--tmut)">${state.show.showCost!==false?`$${si.rate}/8`:''}</span>
+            <span style="font-size:11px;color:var(--tmut)">${state.show.showRates!==false?`$${si.rate}/8`:''}</span>
             <span class="si-working on">Working</span>
             <input class="si-hrs-input" type="number" min="8" max="24" step="0.5"
               value="${si.hours||12}"
@@ -1196,8 +1203,8 @@ function renderBreakdown(){
     const visibleScenes = hideEmpty ? day.scenes.filter(sc => (sc.roles||[]).length > 0) : day.scenes;
     const hiddenSceneCount = day.scenes.length - visibleScenes.length;
     let dayColHdrShown = false;
-    const showCostOn = state.show.showCost !== false;
-    const nCols = showCostOn ? 10 : 9; // sel + edit + # + type + tier + [rate] + hours + bumps + notes + reuse
+    const showRatesOn = state.show.showRates !== false;
+    const nCols = showRatesOn ? 10 : 9; // sel + edit + # + type + tier + [rate] + hours + bumps + notes + reuse
     const dayAllSelected = day.scenes.some(sc=>(sc.roles||[]).length) && day.scenes.every(sc=>(sc.roles||[]).every(r=>_selRoles.has(r.id)));
     const scenesHTML=visibleScenes.map(sc=>{
       const roles=(sc.roles||[]);
@@ -1212,7 +1219,7 @@ function renderBreakdown(){
           <td><strong>${r.count||1}</strong>${r.minors?` <span class="badge badge-minor">Minor</span>`:''}</td>
           <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
           <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
-          ${showCostOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
+          ${showRatesOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
           <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
           <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
           <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
@@ -1226,7 +1233,7 @@ function renderBreakdown(){
         dayColHdrShown = true;
         colHdrHTML = `<thead><tr>
             <th style="text-align:center"><input type="checkbox" class="role-sel" ${dayAllSelected?'checked':''} onchange="toggleDayRoleSel('${day.id}',this.checked)" title="Select all roles this day"></th>
-            <th></th><th>#</th><th>Type</th><th>Tier</th>${showCostOn?'<th>Rate</th>':''}<th>Hours</th>
+            <th></th><th>#</th><th>Type</th><th>Tier</th>${showRatesOn?'<th>Rate</th>':''}<th>Hours</th>
             <th>Bumps</th><th>Notes</th><th>Reuse</th>
           </tr></thead>`;
       }
@@ -1235,7 +1242,7 @@ function renderBreakdown(){
         <table class="roles-table">
           <colgroup>
             <col class="col-sel"><col class="col-edit"><col class="col-count"><col class="col-type">
-            <col class="col-tier">${showCostOn?'<col class="col-rate">':''}<col class="col-hours">
+            <col class="col-tier">${showRatesOn?'<col class="col-rate">':''}<col class="col-hours">
             <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
           </colgroup>
           <tr class="scene-hdr-row">
@@ -1320,8 +1327,8 @@ function renderBreakdown(){
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><button class="btn btn-primary" onclick="currentTab='setup'; render();">← Go to Setup</button><div style="font-size:12px;color:var(--tmut);margin-top:14px">…or use <strong>+ Add Shooting Day</strong> above to add days manually</div></div>`:''}
     ${(()=>{_pruneSelRoles();const n=_selRoles.size;return n?`
-    <div class="bd-totals-strip" style="position:sticky;top:0;z-index:5">
-      <span class="bd-totals-label">${n} role${n===1?'':'s'} selected</span>
+    <div class="sel-float-bar">
+      <span>${n} role${n===1?'':'s'} selected</span>
       <button class="btn btn-danger btn-xs" onclick="deleteSelectedRoles()">✕ Delete selected</button>
       <button class="btn btn-ghost btn-xs" onclick="clearRoleSel()">Clear</button>
     </div>`:''})()}
@@ -1342,8 +1349,8 @@ function renderBoneyard(){
   if(!items.length && !state.days.length) return '';
   const scenesHTML=items.map(sc=>{
     const roles=(sc.roles||[]);
-    const showCostOn = state.show.showCost !== false;
-    const nCols = showCostOn ? 10 : 9;
+    const showRatesOn = state.show.showRates !== false;
+    const nCols = showRatesOn ? 10 : 9;
     const roleRows=roles.map(r=>{
       const bTags=(r.bumps||[]).map(b=>`<span class="bump-tag">${esc(b.label||b.name||'')}</span>`).join('');
       const tier=RATE_MAP[r.tier]||{label:r.tier};
@@ -1353,7 +1360,7 @@ function renderBoneyard(){
         <td><strong>${r.count||1}</strong></td>
         <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
         <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
-        ${showCostOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
+        ${showRatesOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
         <td style="color:var(--tfnt)">${r.hours}h</td>
         <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
         <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
@@ -1364,7 +1371,7 @@ function renderBoneyard(){
       <table class="roles-table">
         <colgroup>
           <col class="col-sel"><col class="col-edit"><col class="col-count"><col class="col-type">
-          <col class="col-tier">${showCostOn?'<col class="col-rate">':''}<col class="col-hours">
+          <col class="col-tier">${showRatesOn?'<col class="col-rate">':''}<col class="col-hours">
           <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
         </colgroup>
         <tr class="scene-hdr-row">
@@ -1411,14 +1418,14 @@ function renderExport(){
     gSI+=stats.siCount;gSAG+=stats.sag;gNU+=stats.nu;gCost+=stats.cost;
     const workingSIs=state.standins.filter(si=>!(day.standinOff||{})[si.id]);
     const rows=[];
-    const showCostOn=state.show.showCost!==false;
-    const expCols=showCostOn?6:5;
+    const showRatesOn=state.show.showRates!==false;
+    const expCols=showRatesOn?6:5;
     if(workingSIs.length){
       rows.push(`<tr class="row-scene-hdr"><td colspan="${expCols}">STAND-INS</td></tr>`);
       workingSIs.forEach(si=>{
         const h=getSIHours(day,si);
         rows.push(`<tr class="row-si"><td>1</td>
-          <td><strong>${esc(si.name)}</strong> — ${esc(si.character||'—')}</td>${showCostOn?`<td>$${si.rate}/8</td>`:''}<td>${h}</td><td>—</td><td>—</td></tr>`);
+          <td><strong>${esc(si.name)}</strong> — ${esc(si.character||'—')}</td>${showRatesOn?`<td>$${si.rate}/8</td>`:''}<td>${h}</td><td>—</td><td>—</td></tr>`);
       });
     }
     day.scenes.forEach(sc=>{
@@ -1428,7 +1435,7 @@ function renderExport(){
         const reuse=reuseDisplayInfo(r,day);
         rows.push(`<tr>
           <td><strong>${r.count||1}</strong>${r.minors?' <em>(minor)</em>':''}</td>
-          <td>${esc(r.type)}</td>${showCostOn?`<td>$${r.baseRate}/8</td>`:''}<td>${r.hours}</td>
+          <td>${esc(r.type)}</td>${showRatesOn?`<td>$${r.baseRate}/8</td>`:''}<td>${r.hours}</td>
           <td style="font-size:11px">${esc(bStr)}</td>
           <td style="font-size:11px">${esc(r.notes||'')}${reuse?` <em>[${esc(reuse.label)}]</em>`:''}</td>
         </tr>`);
@@ -1442,7 +1449,7 @@ function renderExport(){
       <table class="print-table">
         <thead><tr>
           <th style="width:5%">#</th><th style="width:28%">Type</th>
-          ${state.show.showCost!==false?'<th style="width:10%">Rate</th>':''}<th style="width:7%">Hrs</th>
+          ${state.show.showRates!==false?'<th style="width:10%">Rate</th>':''}<th style="width:7%">Hrs</th>
           <th style="width:18%">Bumps</th><th>Notes</th>
         </tr></thead>
         <tbody>${rows.join('')}</tbody>
@@ -1512,6 +1519,7 @@ async function downloadPDF(){
   const M = 36;                                   // page margin (1/2")
   const pageW = doc.internal.pageSize.getWidth();
   const showCost = state.show.showCost !== false;
+  const showRates = state.show.showRates !== false;
   const s = state.show;
 
   // Pre-load logo dimensions so we can size it correctly in the title block.
@@ -1602,7 +1610,7 @@ async function downloadPDF(){
 
     // Build table rows
     const body = [];
-    const pdfCols = showCost ? 6 : 5; // Rate column dropped entirely when costs are hidden
+    const pdfCols = showRates ? 6 : 5; // Rate column dropped entirely when rates are hidden
     const workingSIs = state.standins.filter(si => !(day.standinOff||{})[si.id]);
     if(workingSIs.length){
       body.push([{content:'STAND-INS', colSpan:pdfCols, styles:{fillColor:[245,245,245], fontStyle:'bold', textColor:[80,80,80], fontSize:8}}]);
@@ -1611,7 +1619,7 @@ async function downloadPDF(){
         body.push([
           {content:'1', styles:{halign:'center'}},
           `${si.name} — ${si.character||'—'}`,
-          ...(showCost?[`$${si.rate}/8`]:[]),
+          ...(showRates?[`$${si.rate}/8`]:[]),
           String(h),
           '—',
           {content:'—', styles:{fillColor:[232,244,255]}}
@@ -1630,7 +1638,7 @@ async function downloadPDF(){
         body.push([
           {content:String(r.count||1) + (r.minors?' (m)':''), styles:{halign:'center'}},
           r.type||'',
-          ...(showCost?[`$${r.baseRate}/8`]:[]),
+          ...(showRates?[`$${r.baseRate}/8`]:[]),
           String(r.hours),
           bumpStr,
           notes || '—'
@@ -1640,13 +1648,13 @@ async function downloadPDF(){
 
     doc.autoTable({
       startY: cursorY,
-      head: [showCost?['#','Type','Rate','Hrs','Bumps','Notes']:['#','Type','Hrs','Bumps','Notes']],
+      head: [showRates?['#','Type','Rate','Hrs','Bumps','Notes']:['#','Type','Hrs','Bumps','Notes']],
       body,
       theme:'grid',
       margin:{left:M, right:M},
       styles:{fontSize:9, cellPadding:4, overflow:'linebreak', textColor:[20,20,20], lineColor:[180,180,180]},
       headStyles:{fillColor:[235,235,235], textColor:[60,60,60], fontStyle:'bold', fontSize:8},
-      columnStyles: showCost ? {
+      columnStyles: showRates ? {
         0:{cellWidth:30, halign:'center'},
         1:{cellWidth:170},
         2:{cellWidth:55},
@@ -2574,7 +2582,7 @@ function _applyFreshImport(s){
   const prev=state.show||{};
   const merged={...s.show};
   // Preserve fields the user already filled in on Setup.
-  ['contractType','sagMin','defaultRates','preparedBy','role','isSeries','showCost'].forEach(k=>{
+  ['contractType','sagMin','defaultRates','preparedBy','role','isSeries','showCost','showRates'].forEach(k=>{
     if(prev[k]!==undefined && prev[k]!==null && prev[k]!=='') merged[k]=prev[k];
   });
   // Name and episode: never trust parser values — beta users hit cases where
