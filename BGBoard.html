@@ -146,10 +146,12 @@ tr.scene-hdr-row>.shdr-btns{text-align:right;white-space:nowrap;padding-right:10
 
 /* ROLES TABLE */
 .roles-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;margin-bottom:0}
+.roles-table colgroup .col-sel{width:30px}
+.role-sel{cursor:pointer;accent-color:#2a7fc4}
 .roles-table colgroup .col-edit{width:36px}
 .roles-table colgroup .col-count{width:44px}
 .roles-table colgroup .col-type{width:28%}
-.roles-table tbody tr td:nth-child(3){font-size:11px;font-weight:400}
+.roles-table tbody tr td:nth-child(4){font-size:11px;font-weight:400}
 .roles-table colgroup .col-tier{width:72px}
 .roles-table colgroup .col-rate{width:72px}
 .roles-table colgroup .col-hours{width:72px}
@@ -1019,7 +1021,7 @@ function renderSetup(){
     <div class="card-title"><span><span class="accent">◆</span> Preferences</span></div>
     <label class="cb-row">
       <input type="checkbox" ${s.showCost!==false?'checked':''} onchange="updateShow('showCost',this.checked)">
-      Show estimated cost in day header and totals bar
+      Show rates &amp; estimated costs — uncheck to hide all $ from the Breakdown, Export page, and PDF
     </label>
     <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--br)">
       <span style="font-size:13px;color:var(--tlbl)">Appearance</span>
@@ -1162,7 +1164,7 @@ function renderBreakdown(){
           return `<div class="si-day-row">
             <span class="si-day-name">${esc(si.name)}</span>
             <span class="si-day-char">${esc(si.character)}</span>
-            <span style="font-size:11px;color:var(--tmut)">$${si.rate}/8</span>
+            <span style="font-size:11px;color:var(--tmut)">${state.show.showCost!==false?`$${si.rate}/8`:''}</span>
             <label class="si-off-toggle">
               <input type="checkbox" ${off?'':'checked'} onchange="toggleSIOff('${day.id}','${si.id}',!this.checked)">
               Working
@@ -1177,7 +1179,7 @@ function renderBreakdown(){
           <div class="si-day-row" style="grid-template-columns:160px 1fr 70px 90px 52px 26px">
             <span class="si-day-name">${esc(si.name)}<span class="badge-day-si">DAY</span></span>
             <span class="si-day-char">${esc(si.character||'—')}</span>
-            <span style="font-size:11px;color:var(--tmut)">$${si.rate}/8</span>
+            <span style="font-size:11px;color:var(--tmut)">${state.show.showCost!==false?`$${si.rate}/8`:''}</span>
             <span class="si-working on">Working</span>
             <input class="si-hrs-input" type="number" min="8" max="24" step="0.5"
               value="${si.hours||12}"
@@ -1194,6 +1196,9 @@ function renderBreakdown(){
     const visibleScenes = hideEmpty ? day.scenes.filter(sc => (sc.roles||[]).length > 0) : day.scenes;
     const hiddenSceneCount = day.scenes.length - visibleScenes.length;
     let dayColHdrShown = false;
+    const showCostOn = state.show.showCost !== false;
+    const nCols = showCostOn ? 10 : 9; // sel + edit + # + type + tier + [rate] + hours + bumps + notes + reuse
+    const dayAllSelected = day.scenes.some(sc=>(sc.roles||[]).length) && day.scenes.every(sc=>(sc.roles||[]).every(r=>_selRoles.has(r.id)));
     const scenesHTML=visibleScenes.map(sc=>{
       const roles=(sc.roles||[]);
       const roleRows=roles.map(r=>{
@@ -1202,11 +1207,12 @@ function renderBreakdown(){
         const tier=RATE_MAP[r.tier]||{label:r.tier};
         const ot=parseFloat(r.hours)>8;
         return `<tr onclick="openRoleModal('${day.id}','${sc.id}','${r.id}')" title="Click to edit">
+          <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="role-sel" ${_selRoles.has(r.id)?'checked':''} onchange="toggleRoleSel('${r.id}',this.checked)" title="Select for bulk delete"></td>
           <td style="text-align:center;width:30px"><span class="edit-icon">✎</span></td>
           <td><strong>${r.count||1}</strong>${r.minors?` <span class="badge badge-minor">Minor</span>`:''}</td>
           <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
           <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
-          <td style="color:var(--tfnt)">$${r.baseRate}/8</td>
+          ${showCostOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
           <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
           <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
           <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
@@ -1219,7 +1225,8 @@ function renderBreakdown(){
       if (roles.length && !dayColHdrShown) {
         dayColHdrShown = true;
         colHdrHTML = `<thead><tr>
-            <th></th><th>#</th><th>Type</th><th>Tier</th><th>Rate</th><th>Hours</th>
+            <th style="text-align:center"><input type="checkbox" class="role-sel" ${dayAllSelected?'checked':''} onchange="toggleDayRoleSel('${day.id}',this.checked)" title="Select all roles this day"></th>
+            <th></th><th>#</th><th>Type</th><th>Tier</th>${showCostOn?'<th>Rate</th>':''}<th>Hours</th>
             <th>Bumps</th><th>Notes</th><th>Reuse</th>
           </tr></thead>`;
       }
@@ -1227,19 +1234,19 @@ function renderBreakdown(){
       return `<div class="scene-block" draggable="true" data-scene-id="${sc.id}" data-day-id="${day.id}">
         <table class="roles-table">
           <colgroup>
-            <col class="col-edit"><col class="col-count"><col class="col-type">
-            <col class="col-tier"><col class="col-rate"><col class="col-hours">
+            <col class="col-sel"><col class="col-edit"><col class="col-count"><col class="col-type">
+            <col class="col-tier">${showCostOn?'<col class="col-rate">':''}<col class="col-hours">
             <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
           </colgroup>
           <tr class="scene-hdr-row">
-            <td class="shdr-main" colspan="7"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag to reorder scene">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
+            <td class="shdr-main" colspan="${nCols-2}"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag to reorder scene">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set)}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
             <td class="shdr-btns" colspan="2">
               <button class="btn btn-secondary btn-xs" onclick="openSceneModal('${day.id}','${sc.id}')">Edit Scene</button>
               <button class="btn btn-danger btn-xs" onclick="deleteScene('${day.id}','${sc.id}')">✕</button>
             </td>
           </tr>
           ${roles.length?`${colHdrHTML}<tbody>${roleRows}</tbody>`
-          :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG — click to add</td></tr>`}
+          :`<tr class="no-roles-row" onclick="openRoleModal('${day.id}','${sc.id}',null)"><td colspan="${nCols}" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG — click to add</td></tr>`}
         </table>
       </div>`;
     }).join('') + (hiddenSceneCount > 0 && visibleScenes.length === 0
@@ -1312,6 +1319,12 @@ function renderBreakdown(){
     </div>
     ${addForm}
     ${state.days.length===0?`<div class="empty card"><div class="empty-icon">🎬</div>No shooting days yet.<br><br><button class="btn btn-primary" onclick="currentTab='setup'; render();">← Go to Setup</button><div style="font-size:12px;color:var(--tmut);margin-top:14px">…or use <strong>+ Add Shooting Day</strong> above to add days manually</div></div>`:''}
+    ${(()=>{_pruneSelRoles();const n=_selRoles.size;return n?`
+    <div class="bd-totals-strip" style="position:sticky;top:0;z-index:5">
+      <span class="bd-totals-label">${n} role${n===1?'':'s'} selected</span>
+      <button class="btn btn-danger btn-xs" onclick="deleteSelectedRoles()">✕ Delete selected</button>
+      <button class="btn btn-ghost btn-xs" onclick="clearRoleSel()">Clear</button>
+    </div>`:''})()}
     ${tp==='top'?totalsStrip:''}
     ${dayBlocks}
     ${tp==='bottom'?totalsStrip:''}
@@ -1329,15 +1342,18 @@ function renderBoneyard(){
   if(!items.length && !state.days.length) return '';
   const scenesHTML=items.map(sc=>{
     const roles=(sc.roles||[]);
+    const showCostOn = state.show.showCost !== false;
+    const nCols = showCostOn ? 10 : 9;
     const roleRows=roles.map(r=>{
       const bTags=(r.bumps||[]).map(b=>`<span class="bump-tag">${esc(b.label||b.name||'')}</span>`).join('');
       const tier=RATE_MAP[r.tier]||{label:r.tier};
       return `<tr>
+        <td></td>
         <td style="text-align:center;width:30px"><span class="edit-icon">✎</span></td>
         <td><strong>${r.count||1}</strong></td>
         <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
         <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
-        <td style="color:var(--tfnt)">$${r.baseRate}/8</td>
+        ${showCostOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
         <td style="color:var(--tfnt)">${r.hours}h</td>
         <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
         <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
@@ -1347,17 +1363,17 @@ function renderBoneyard(){
     return `<div class="scene-block" draggable="true" data-scene-id="${sc.id}" data-day-id="__boneyard__">
       <table class="roles-table">
         <colgroup>
-          <col class="col-edit"><col class="col-count"><col class="col-type">
-          <col class="col-tier"><col class="col-rate"><col class="col-hours">
+          <col class="col-sel"><col class="col-edit"><col class="col-count"><col class="col-type">
+          <col class="col-tier">${showCostOn?'<col class="col-rate">':''}<col class="col-hours">
           <col class="col-bumps"><col class="col-notes"><col class="col-reuse">
         </colgroup>
         <tr class="scene-hdr-row">
-          <td class="shdr-main" colspan="7"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag back to a day">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set||'(no set)')}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
+          <td class="shdr-main" colspan="${nCols-2}"><div class="shdr-inner"><span class="scene-drag-handle" title="Drag back to a day">⠿</span>${sc.sceneId?`<span class="scene-id">Sc ${esc(sc.sceneId)}</span>`:''}<span class="scene-set">${esc(sc.set||'(no set)')}</span>${sc.desc?`<span class="scene-desc"> — ${esc(sc.desc)}</span>`:''}</div></td>
           <td class="shdr-btns" colspan="2">
             <button class="btn btn-danger btn-xs" onclick="deleteBoneyardScene('${sc.id}')" title="Remove from boneyard">✕</button>
           </td>
         </tr>
-        ${roles.length?`<tbody>${roleRows}</tbody>`:`<tr class="no-roles-row"><td colspan="9" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG</td></tr>`}
+        ${roles.length?`<tbody>${roleRows}</tbody>`:`<tr class="no-roles-row"><td colspan="${nCols}" style="font-size:12px;color:var(--tmut);padding:8px 12px 10px;font-style:italic">No BG</td></tr>`}
       </table>
     </div>`;
   }).join('');
@@ -1395,22 +1411,24 @@ function renderExport(){
     gSI+=stats.siCount;gSAG+=stats.sag;gNU+=stats.nu;gCost+=stats.cost;
     const workingSIs=state.standins.filter(si=>!(day.standinOff||{})[si.id]);
     const rows=[];
+    const showCostOn=state.show.showCost!==false;
+    const expCols=showCostOn?6:5;
     if(workingSIs.length){
-      rows.push(`<tr class="row-scene-hdr"><td colspan="6">STAND-INS</td></tr>`);
+      rows.push(`<tr class="row-scene-hdr"><td colspan="${expCols}">STAND-INS</td></tr>`);
       workingSIs.forEach(si=>{
         const h=getSIHours(day,si);
         rows.push(`<tr class="row-si"><td>1</td>
-          <td><strong>${esc(si.name)}</strong> — ${esc(si.character||'—')}</td><td>$${si.rate}/8</td><td>${h}</td><td>—</td><td>—</td></tr>`);
+          <td><strong>${esc(si.name)}</strong> — ${esc(si.character||'—')}</td>${showCostOn?`<td>$${si.rate}/8</td>`:''}<td>${h}</td><td>—</td><td>—</td></tr>`);
       });
     }
     day.scenes.forEach(sc=>{
-      rows.push(`<tr class="row-scene-hdr"><td colspan="6">${sc.sceneId?'Sc. '+esc(sc.sceneId)+' · ':''}${esc(sc.set)}${sc.desc?' — '+esc(sc.desc):''}</td></tr>`);
+      rows.push(`<tr class="row-scene-hdr"><td colspan="${expCols}">${sc.sceneId?'Sc. '+esc(sc.sceneId)+' · ':''}${esc(sc.set)}${sc.desc?' — '+esc(sc.desc):''}</td></tr>`);
       (sc.roles||[]).forEach(r=>{
         const bStr=(r.bumps||[]).map(b=>b.label).join(', ')||'—';
         const reuse=reuseDisplayInfo(r,day);
         rows.push(`<tr>
           <td><strong>${r.count||1}</strong>${r.minors?' <em>(minor)</em>':''}</td>
-          <td>${esc(r.type)}</td><td>$${r.baseRate}/8</td><td>${r.hours}</td>
+          <td>${esc(r.type)}</td>${showCostOn?`<td>$${r.baseRate}/8</td>`:''}<td>${r.hours}</td>
           <td style="font-size:11px">${esc(bStr)}</td>
           <td style="font-size:11px">${esc(r.notes||'')}${reuse?` <em>[${esc(reuse.label)}]</em>`:''}</td>
         </tr>`);
@@ -1424,7 +1442,7 @@ function renderExport(){
       <table class="print-table">
         <thead><tr>
           <th style="width:5%">#</th><th style="width:28%">Type</th>
-          <th style="width:10%">Rate</th><th style="width:7%">Hrs</th>
+          ${state.show.showCost!==false?'<th style="width:10%">Rate</th>':''}<th style="width:7%">Hrs</th>
           <th style="width:18%">Bumps</th><th>Notes</th>
         </tr></thead>
         <tbody>${rows.join('')}</tbody>
@@ -1584,15 +1602,16 @@ async function downloadPDF(){
 
     // Build table rows
     const body = [];
+    const pdfCols = showCost ? 6 : 5; // Rate column dropped entirely when costs are hidden
     const workingSIs = state.standins.filter(si => !(day.standinOff||{})[si.id]);
     if(workingSIs.length){
-      body.push([{content:'STAND-INS', colSpan:6, styles:{fillColor:[245,245,245], fontStyle:'bold', textColor:[80,80,80], fontSize:8}}]);
+      body.push([{content:'STAND-INS', colSpan:pdfCols, styles:{fillColor:[245,245,245], fontStyle:'bold', textColor:[80,80,80], fontSize:8}}]);
       workingSIs.forEach(si => {
         const h = getSIHours(day, si);
         body.push([
           {content:'1', styles:{halign:'center'}},
           `${si.name} — ${si.character||'—'}`,
-          `$${si.rate}/8`,
+          ...(showCost?[`$${si.rate}/8`]:[]),
           String(h),
           '—',
           {content:'—', styles:{fillColor:[232,244,255]}}
@@ -1601,7 +1620,7 @@ async function downloadPDF(){
     }
     (day.scenes||[]).forEach(sc => {
       const hdr = (sc.sceneId ? `Sc. ${sc.sceneId} · ` : '') + (sc.set||'') + (sc.desc ? ` — ${sc.desc}` : '');
-      body.push([{content:hdr, colSpan:6, styles:{fillColor:[235,235,235], fontStyle:'bold', textColor:[60,60,60], fontSize:8}}]);
+      body.push([{content:hdr, colSpan:pdfCols, styles:{fillColor:[235,235,235], fontStyle:'bold', textColor:[60,60,60], fontSize:8}}]);
       (sc.roles||[]).forEach(r => {
         const bumpStr = (r.bumps||[]).map(b => b.label).join(', ') || '—';
         const reuse = reuseDisplayInfo(r, day);
@@ -1611,7 +1630,7 @@ async function downloadPDF(){
         body.push([
           {content:String(r.count||1) + (r.minors?' (m)':''), styles:{halign:'center'}},
           r.type||'',
-          `$${r.baseRate}/8`,
+          ...(showCost?[`$${r.baseRate}/8`]:[]),
           String(r.hours),
           bumpStr,
           notes || '—'
@@ -1621,19 +1640,25 @@ async function downloadPDF(){
 
     doc.autoTable({
       startY: cursorY,
-      head: [['#','Type','Rate','Hrs','Bumps','Notes']],
+      head: [showCost?['#','Type','Rate','Hrs','Bumps','Notes']:['#','Type','Hrs','Bumps','Notes']],
       body,
       theme:'grid',
       margin:{left:M, right:M},
       styles:{fontSize:9, cellPadding:4, overflow:'linebreak', textColor:[20,20,20], lineColor:[180,180,180]},
       headStyles:{fillColor:[235,235,235], textColor:[60,60,60], fontStyle:'bold', fontSize:8},
-      columnStyles:{
+      columnStyles: showCost ? {
         0:{cellWidth:30, halign:'center'},
         1:{cellWidth:170},
         2:{cellWidth:55},
         3:{cellWidth:35, halign:'center'},
         4:{cellWidth:120},
         5:{cellWidth:'auto'}
+      } : {
+        0:{cellWidth:30, halign:'center'},
+        1:{cellWidth:200},
+        2:{cellWidth:35, halign:'center'},
+        3:{cellWidth:120},
+        4:{cellWidth:'auto'}
       },
       didDrawPage: () => {} // (placeholder — could add footer here later)
     });
@@ -1683,7 +1708,21 @@ function toggleTotalsPos(){state.preferences=state.preferences||{};state.prefere
 function getHideEmpty(){return !!(state.preferences&&state.preferences.hideEmptyScenes);}
 function toggleHideEmpty(){state.preferences=state.preferences||{};state.preferences.hideEmptyScenes=!getHideEmpty();save();render();}
 function deleteScene(dayId,sceneId){if(!confirm('Delete this scene?'))return;const d=state.days.find(x=>x.id===dayId);if(d)d.scenes=d.scenes.filter(s=>s.id!==sceneId);save();render();}
-function deleteRole(dayId,sceneId,roleId){const d=state.days.find(x=>x.id===dayId);const s=d?.scenes.find(x=>x.id===sceneId);if(s)s.roles=(s.roles||[]).filter(r=>r.id!==roleId);save();render();}
+function deleteRole(dayId,sceneId,roleId){const d=state.days.find(x=>x.id===dayId);const s=d?.scenes.find(x=>x.id===sceneId);if(s)s.roles=(s.roles||[]).filter(r=>r.id!==roleId);_selRoles.delete(roleId);save();render();}
+
+// Multi-select for bulk role delete. Transient (not saved) — cleared on project switch via render path.
+let _selRoles=new Set();
+function _pruneSelRoles(){const live=new Set();state.days.forEach(d=>d.scenes.forEach(sc=>(sc.roles||[]).forEach(r=>live.add(r.id))));_selRoles.forEach(id=>{if(!live.has(id))_selRoles.delete(id);});}
+function toggleRoleSel(id,on){if(on)_selRoles.add(id);else _selRoles.delete(id);render();}
+function toggleDayRoleSel(dayId,on){const d=state.days.find(x=>x.id===dayId);if(!d)return;d.scenes.forEach(sc=>(sc.roles||[]).forEach(r=>{if(on)_selRoles.add(r.id);else _selRoles.delete(r.id);}));render();}
+function clearRoleSel(){_selRoles.clear();render();}
+function deleteSelectedRoles(){
+  _pruneSelRoles();
+  const n=_selRoles.size;if(!n)return;
+  if(!confirm(`Delete ${n} selected role${n===1?'':'s'}? This can't be undone.`))return;
+  state.days.forEach(d=>d.scenes.forEach(sc=>{sc.roles=(sc.roles||[]).filter(r=>!_selRoles.has(r.id));}));
+  _selRoles.clear();save();render();
+}
 
 function toggleSIOff(dayId,siId,isOff){
   const day=state.days.find(d=>d.id===dayId);if(!day)return;
