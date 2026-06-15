@@ -438,9 +438,21 @@ let currentTab='dashboard';
 let expandedDays={};
 // Active save tracking
 let _saveId=null, _saveName=null;
+// Restore the server save reference (id + name) on page load so a reload keeps
+// the board bound to its existing save. Without this, _saveId resets to null on
+// reload and the next autosave mints a fresh id — forking a duplicate project
+// every visit. Mirrors the board content persisted under 'bgboard'.
+(()=>{try{const r=localStorage.getItem('bgboard-saveref');if(r){const o=JSON.parse(r);_saveId=o.id||null;_saveName=o.name||null;}}catch(e){}})();
+function _persistSaveRef(){
+  try{
+    if(_saveId) localStorage.setItem('bgboard-saveref',JSON.stringify({id:_saveId,name:_saveName||''}));
+    else localStorage.removeItem('bgboard-saveref');
+  }catch(e){}
+}
 
 function save(){
   try{localStorage.setItem('bgboard',JSON.stringify(state));}catch(e){}
+  _persistSaveRef();
   _scheduleAutosave();
 }
 // ── Autosave (Phase 2.1) ────────────────────────────────────
@@ -2398,7 +2410,7 @@ async function _autoSaveCurrent(){
   try{
     const res=await fetch('/saves',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await res.json();
-    if(j.ok){ _saveId=id; _saveName=name; return id; }
+    if(j.ok){ _saveId=id; _saveName=name; _persistSaveRef(); return id; }
   }catch(e){}
   return null;
 }
