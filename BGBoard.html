@@ -562,11 +562,22 @@ function dayRoleContribs(day){
   });
 }
 
+// Transient: roleId → {sag, nu, nuRate} for roles split at the union line.
+// Rebuilt by autoTierAll() on every render; never persisted to a save.
+let _splitMap={};
+
 function getDayStats(day){
   let sag=0,nu=0,cost=0;
   dayRoleContribs(day).forEach(({role:r,contrib})=>{
-    if(r.tier==='nonunion') nu+=contrib; else sag+=contrib;
-    cost+=calcPay(r.baseRate,r.hours,r.bumps)*contrib;
+    const sp=_splitMap[r.id];
+    if(sp){
+      sag+=sp.sag; nu+=sp.nu;
+      cost+=calcPay(r.baseRate,r.hours,r.bumps)*sp.sag
+           +calcPay(sp.nuRate,r.hours,r.bumps)*sp.nu;
+    } else {
+      if(r.tier==='nonunion') nu+=contrib; else sag+=contrib;
+      cost+=calcPay(r.baseRate,r.hours,r.bumps)*contrib;
+    }
   });
 
   const globalSiCount=state.standins.filter(si=>!(day.standinOff||{})[si.id]).length;
@@ -577,33 +588,56 @@ function getDayStats(day){
 
 // ── AUTO-TIER: per-day Union / Non-Union split ─────────────────────────────
 // Producer default: the first `sagMin` background headcount each shooting day
-// are SAG; everyone past that line defaults to Non-Union. Roles are kept whole
-// — the role that straddles the line stays SAG, so the day's SAG count never
-// drops below the minimum. Only plain 'sag'/'nonunion' BG roles are managed;
-// special tiers (SAG Special Performer, Stand-In, Precision Driver, Custom) are
-// left as the user set them but still count toward the union floor. When a role
-// flips tier, its base rate moves to the new tier's default ONLY if it was still
-// sitting at the old tier's default (a hand-typed rate is preserved). Runs on
-// every render, so it stays in sync as roles/counts change.
+// are SAG; everyone past that line defaults to Non-Union. When the line falls
+// inside a single role (e.g. a 200-person role with an 85 minimum), that role
+// is split — part SAG, part Non-Union — so every day lands exactly on the union
+// minimum. The split is recorded in _splitMap (transient) and shown as two rows
+// on screen, the export page, and the PDF; the role itself stays one editable
+// entry. Only plain 'sag'/'nonunion' BG roles are managed; special tiers (SAG
+// Special Performer, Stand-In, Precision Driver, Custom) are left as the user
+// set them but still count toward the union floor. Reuse-reduced roles are
+// assigned whole (never split). Runs on every render, so it stays in sync.
+function setRoleTier(r,want,dr){
+  if(r.tier===want) return;
+  if(dr[r.tier]!==undefined && Number(r.baseRate)===Number(dr[r.tier]) && dr[want]!==undefined) r.baseRate=dr[want];
+  r.tier=want;
+}
 function autoTierAll(){
+  _splitMap={};
   const min=parseInt(state.show.sagMin)||0;
   if(min<=0) return;                       // non-union / no-minimum contracts: leave tiers alone
   const dr=state.show.defaultRates||{};
+  const nuRate=(dr.nonunion!==undefined)?dr.nonunion:null;
   (state.days||[]).forEach(day=>{
     let acc=0;
     dayRoleContribs(day).forEach(({role:r,contrib})=>{
       if(r.tier==='sag'||r.tier==='nonunion'){
-        const want = acc<min ? 'sag' : 'nonunion';
-        if(r.tier!==want){
-          if(dr[r.tier]!==undefined && Number(r.baseRate)===Number(dr[r.tier]) && dr[want]!==undefined){
-            r.baseRate=dr[want];
+        const count=parseInt(r.count)||1;
+        if(contrib===count){            // normal, fully-counting role: can split at the line
+          const sagPart=Math.min(count,Math.max(0,min-acc));
+          const nuPart=count-sagPart;
+          if(sagPart>0 && nuPart>0){
+            _splitMap[r.id]={sag:sagPart,nu:nuPart,nuRate:(nuRate!==null?nuRate:r.baseRate)};
+            setRoleTier(r,'sag',dr);      // SAG portion keeps the SAG rate
+          } else {
+            setRoleTier(r, sagPart===0 ? 'nonunion' : 'sag', dr);
           }
-          r.tier=want;
+        } else {                          // reuse-reduced role: assign whole by position
+          setRoleTier(r, acc<min ? 'sag' : 'nonunion', dr);
         }
       }
       acc+=contrib;                        // every union performer counts toward the floor
     });
   });
+}
+// Display segments for a role: one normally, two when split at the union line.
+function roleTierSegments(r){
+  const sp=_splitMap[r.id];
+  if(sp) return [
+    {count:sp.sag, tierId:'sag',      rate:r.baseRate, tail:false},
+    {count:sp.nu,  tierId:'nonunion', rate:sp.nuRate,  tail:true},
+  ];
+  return [{count:(parseInt(r.count)||1), tierId:r.tier, rate:r.baseRate, tail:false}];
 }
 
 function getSIHours(day,si){
@@ -1265,20 +1299,37 @@ function renderBreakdown(){
       const roleRows=roles.map(r=>{
         const reuse=reuseDisplayInfo(r,day);
         const bTags=(r.bumps||[]).map(b=>`<span class="bump-tag">${esc(b.label)}</span>`).join('');
-        const tier=RATE_MAP[r.tier]||{label:r.tier};
         const ot=parseFloat(r.hours)>8;
-        return `<tr onclick="openRoleModal('${day.id}','${sc.id}','${r.id}')" title="Click to edit">
-          <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="role-sel" ${_selRoles.has(r.id)?'checked':''} onchange="toggleRoleSel('${r.id}',this.checked)" title="Select for bulk delete"></td>
-          <td style="text-align:center;width:30px"><span class="edit-icon">✎</span></td>
-          <td><strong>${r.count||1}</strong>${r.minors?` <span class="badge badge-minor">Minor</span>`:''}</td>
-          <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
-          <td><span class="badge badge-${esc(r.tier||'sag')}">${esc(tier.label)}</span></td>
-          ${showRatesOn?`<td style="color:var(--tfnt)">$${r.baseRate}/8</td>`:''}
-          <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
-          <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
-          <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
-          <td>${reuse?`<span class="reuse-tag${reuse.explicit?'':' reuse-tag-auto'}">${esc(reuse.label)}</span>`:''}</td>
-        </tr>`;
+        return roleTierSegments(r).map((seg,i)=>{
+          const tier=RATE_MAP[seg.tierId]||{label:seg.tierId};
+          if(!seg.tail){
+            return `<tr onclick="openRoleModal('${day.id}','${sc.id}','${r.id}')" title="Click to edit">
+              <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="role-sel" ${_selRoles.has(r.id)?'checked':''} onchange="toggleRoleSel('${r.id}',this.checked)" title="Select for bulk delete"></td>
+              <td style="text-align:center;width:30px"><span class="edit-icon">✎</span></td>
+              <td><strong>${seg.count}</strong>${r.minors?` <span class="badge badge-minor">Minor</span>`:''}</td>
+              <td style="font-weight:600;color:var(--t2)">${esc(r.type)}</td>
+              <td><span class="badge badge-${esc(seg.tierId||'sag')}">${esc(tier.label)}</span></td>
+              ${showRatesOn?`<td style="color:var(--tfnt)">$${seg.rate}/8</td>`:''}
+              <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
+              <td>${bTags?`<div class="bump-tags">${bTags}</div>`:'<span style="color:var(--br)">—</span>'}</td>
+              <td style="color:var(--tmut);font-size:11px">${esc(r.notes||'—')}</td>
+              <td>${reuse?`<span class="reuse-tag${reuse.explicit?'':' reuse-tag-auto'}">${esc(reuse.label)}</span>`:''}</td>
+            </tr>`;
+          }
+          // Split tail — the Non-Union portion of the same role (over the union minimum)
+          return `<tr onclick="openRoleModal('${day.id}','${sc.id}','${r.id}')" title="Auto-split: over the SAG minimum" style="background:var(--bg-el)">
+            <td></td>
+            <td></td>
+            <td><strong>${seg.count}</strong></td>
+            <td style="font-weight:600;color:var(--tmut);font-style:italic">↳ ${esc(r.type)} <span style="font-size:10px;font-style:normal">(over union min)</span></td>
+            <td><span class="badge badge-${esc(seg.tierId)}">${esc(tier.label)}</span></td>
+            ${showRatesOn?`<td style="color:var(--tfnt)">$${seg.rate}/8</td>`:''}
+            <td style="color:var(--tfnt)">${r.hours}h${ot?'<span class="ot-warn"> OT</span>':''}</td>
+            <td><span style="color:var(--br)">—</span></td>
+            <td style="color:var(--tmut);font-size:11px">—</td>
+            <td></td>
+          </tr>`;
+        }).join('');
       }).join('');
 
       // Emit column header only once per day, on the first scene that has roles
@@ -1487,12 +1538,14 @@ function renderExport(){
       (sc.roles||[]).forEach(r=>{
         const bStr=(r.bumps||[]).map(b=>b.label).join(', ')||'—';
         const reuse=reuseDisplayInfo(r,day);
-        rows.push(`<tr>
-          <td><strong>${r.count||1}</strong>${r.minors?' <em>(minor)</em>':''}</td>
-          <td>${esc(r.type)}</td>${showRatesOn?`<td>$${r.baseRate}/8</td>`:''}<td>${r.hours}</td>
-          <td style="font-size:11px">${esc(bStr)}</td>
-          <td style="font-size:11px">${esc(r.notes||'')}${reuse?` <em>[${esc(reuse.label)}]</em>`:''}</td>
-        </tr>`);
+        roleTierSegments(r).forEach(seg=>{
+          rows.push(`<tr>
+            <td><strong>${seg.count}</strong>${(!seg.tail&&r.minors)?' <em>(minor)</em>':''}</td>
+            <td>${seg.tail?'↳ '+esc(r.type)+' <em>(Non-Union, over union min)</em>':esc(r.type)}</td>${showRatesOn?`<td>$${seg.rate}/8</td>`:''}<td>${r.hours}</td>
+            <td style="font-size:11px">${seg.tail?'—':esc(bStr)}</td>
+            <td style="font-size:11px">${seg.tail?'—':esc(r.notes||'')+(reuse?` <em>[${esc(reuse.label)}]</em>`:'')}</td>
+          </tr>`);
+        });
       });
     });
 
@@ -1690,14 +1743,16 @@ async function downloadPDF(){
         // PDF uses layperson-friendly "Reuse from Sc. X" for auto-links; explicit reuse keeps its detailed label.
         const reuseNote = reuse ? (reuse.explicit ? reuse.label : `Reuse from ${reuse.ref}`) : '';
         const notes = (r.notes||'') + (reuseNote ? ` [${reuseNote}]` : '');
-        body.push([
-          {content:String(r.count||1) + (r.minors?' (m)':''), styles:{halign:'center'}},
-          r.type||'',
-          ...(showRates?[`$${r.baseRate}/8`]:[]),
-          String(r.hours),
-          bumpStr,
-          notes || '—'
-        ]);
+        roleTierSegments(r).forEach(seg => {
+          body.push([
+            {content:String(seg.count) + (!seg.tail&&r.minors?' (m)':''), styles:{halign:'center'}},
+            seg.tail ? `   ↳ ${r.type||''}` : (r.type||''),
+            ...(showRates?[`$${seg.rate}/8`]:[]),
+            String(r.hours),
+            seg.tail ? '—' : bumpStr,
+            seg.tail ? 'Non-Union (over union min)' : (notes || '—')
+          ]);
+        });
       });
     });
 
