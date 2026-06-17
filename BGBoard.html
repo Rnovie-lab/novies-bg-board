@@ -513,13 +513,16 @@ function fmtDate(d){
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function getDayStats(day){
-  let sag=0,nu=0,cost=0;
-  // Reuse model (per role):
-  //  • role.reuseOf = {roleId:'xxx', count:N>0}   → explicit reuse of N people from role xxx
-  //  • role.reuseOf = {roleId:'',    count:0}     → explicit "None / different people" (bypass auto)
-  //  • role.reuseOf absent                        → auto-by-name fallback: same name = same group,
-  //                                                 max-count wins, others contribute 0
+// Reuse-aware per-role headcount for a day. Returns an ordered array of
+// {role, contrib} (display order: scene order, then role order within scene).
+// Reuse model (per role):
+//  • role.reuseOf = {roleId:'xxx', count:N>0}   → explicit reuse of N people from role xxx
+//  • role.reuseOf = {roleId:'',    count:0}     → explicit "None / different people" (bypass auto)
+//  • role.reuseOf absent                        → auto-by-name fallback: same name = same group,
+//                                                 max-count wins, others contribute 0
+// Shared by getDayStats (totals) and autoTierAll (Union/Non-Union split) so the
+// two can never drift apart.
+function dayRoleContribs(day){
   const allRoles=[];
   day.scenes.forEach(sc=>(sc.roles||[]).forEach(r=>allRoles.push(r)));
   const idSet=new Set(allRoles.map(r=>r.id));
@@ -538,7 +541,7 @@ function getDayStats(day){
   });
   autoCand.forEach((v,k)=>autoWinner.set(k,v.roleId));
 
-  allRoles.forEach(r=>{
+  return allRoles.map(r=>{
     const n=parseInt(r.count)||1;
     let contrib=n;
     if(r.reuseOf){
@@ -555,6 +558,13 @@ function getDayStats(day){
         if(winnerId&&winnerId!==r.id) contrib=0;
       }
     }
+    return {role:r,contrib};
+  });
+}
+
+function getDayStats(day){
+  let sag=0,nu=0,cost=0;
+  dayRoleContribs(day).forEach(({role:r,contrib})=>{
     if(r.tier==='nonunion') nu+=contrib; else sag+=contrib;
     cost+=calcPay(r.baseRate,r.hours,r.bumps)*contrib;
   });
@@ -563,6 +573,37 @@ function getDayStats(day){
   const daySiCount=(day.dayStandins||[]).length;
   const siCount=globalSiCount+daySiCount;
   return {sag,nu,siCount,cost};
+}
+
+// ── AUTO-TIER: per-day Union / Non-Union split ─────────────────────────────
+// Producer default: the first `sagMin` background headcount each shooting day
+// are SAG; everyone past that line defaults to Non-Union. Roles are kept whole
+// — the role that straddles the line stays SAG, so the day's SAG count never
+// drops below the minimum. Only plain 'sag'/'nonunion' BG roles are managed;
+// special tiers (SAG Special Performer, Stand-In, Precision Driver, Custom) are
+// left as the user set them but still count toward the union floor. When a role
+// flips tier, its base rate moves to the new tier's default ONLY if it was still
+// sitting at the old tier's default (a hand-typed rate is preserved). Runs on
+// every render, so it stays in sync as roles/counts change.
+function autoTierAll(){
+  const min=parseInt(state.show.sagMin)||0;
+  if(min<=0) return;                       // non-union / no-minimum contracts: leave tiers alone
+  const dr=state.show.defaultRates||{};
+  (state.days||[]).forEach(day=>{
+    let acc=0;
+    dayRoleContribs(day).forEach(({role:r,contrib})=>{
+      if(r.tier==='sag'||r.tier==='nonunion'){
+        const want = acc<min ? 'sag' : 'nonunion';
+        if(r.tier!==want){
+          if(dr[r.tier]!==undefined && Number(r.baseRate)===Number(dr[r.tier]) && dr[want]!==undefined){
+            r.baseRate=dr[want];
+          }
+          r.tier=want;
+        }
+      }
+      acc+=contrib;                        // every union performer counts toward the floor
+    });
+  });
 }
 
 function getSIHours(day,si){
@@ -622,6 +663,7 @@ function sagMinWarning(day,stats){
 // RENDER
 // ══════════════════════════════════════════════════════════
 function render(){
+  autoTierAll();
   updateNavInfo(); updateNavTabs();
   document.getElementById('main').innerHTML=
     currentTab==='dashboard'?renderDashboard()
@@ -1526,6 +1568,7 @@ async function downloadPDF(){
     showToast('PDF library still loading — try again in a moment', 'error');
     return;
   }
+  autoTierAll();
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({unit:'pt', format:'letter', orientation:'portrait'});
   const M = 36;                                   // page margin (1/2")
