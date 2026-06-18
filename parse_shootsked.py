@@ -232,6 +232,16 @@ SCENE_PATTERNS = [
      lambda m: {'scene_id': m.group(1).strip(),
                 'intex': m.group(2).upper(),
                 'location': m.group(3).strip()}),
+    # Cineapse "bare number" one-line header (checked last — most permissive):
+    #   "12  INT  HALLWAY - AIR TRAFFIC BUNKER - POLICE  NIGHT  1  1 6/8pgs  7, 11, 26"
+    # Scene number, then INT/EXT, then the set, then a time-of-day token that
+    # ends the set capture. Cast IDs and page counts trail past the time-of-day.
+    (re.compile(r'^(\d+[A-Za-z]{0,2})\s+(INT/EXT|INT|EXT)\s+(.+?)\s+'
+                r'(?:DAY|NIGHT|NIGHT/DAY|DAY/NIGHT|MORNING|EVENING|AFTERNOON|'
+                r'DUSK|DAWN|SUNSET|SUNRISE|CONTINUOUS|MAGIC\s+HOUR|NIGH)\b', re.I),
+     lambda m: {'scene_id': m.group(1).strip(),
+                'intex': m.group(2).upper(),
+                'location': m.group(3).strip()}),
 ]
 
 # ── INT/EXT slug lines ────────────────────────────────────────────────────────
@@ -472,6 +482,22 @@ def parse_bg_role(text):
 
     if not clean or len(clean) < 2:
         return None
+
+    # Reject scene-header remnants: a bare time-of-day token, optionally followed
+    # by a short unit code, that leaks into the BG column when a header row is
+    # split (e.g. "NIGHT 1", "NIGHT 2", "DAY 1", "NIGHT FB1"). Never a BG role.
+    if re.match(r'^(DAY|NIGHT|DUSK|DAWN|MORNING|EVENING|AFTERNOON|CONTINUOUS|'
+                r'SUNSET|SUNRISE|MAGIC\s+HOUR)(\s+\S{1,4})?$', clean, re.I):
+        return None
+
+    # Trailing parenthesized count: "AIR TRAFFIC CONTROLLERS (6)" → 6 of that role
+    # (Cineapse lists the headcount in parentheses after the role name).
+    m_par = re.search(r'\((\d+)\)\s*$', clean)
+    if m_par:
+        count = int(m_par.group(1))
+        desc  = clean[:m_par.start()].strip().rstrip('.,;:').strip()
+        if desc and len(desc) >= 2 and not CAST_RE.match(desc):
+            return (count, desc)
 
     # "12 Office Workers" / "BG crowd" / "9 softees"
     m = BG_COUNT_RE.match(clean)
@@ -732,6 +758,19 @@ def assemble_schedule(rows, column_mode=False):
         'practical','notes','questions','comments','visual','effects',
     })
 
+    # Cineapse set names sometimes wrap to a second line ("...POLICE" then a
+    # separate "COMPLEX"). After a scene header, the next row may be that
+    # continuation; if it's a short all-caps fragment we append it to the set.
+    expect_set_cont = False
+    SET_CONT_RE = re.compile(r"^[A-Z0-9][A-Z0-9 /&'.\-]*$")
+    def _is_set_cont(t):
+        t = t.strip()
+        return bool(t and len(t) <= 30 and 1 <= len(t.split()) <= 4
+                    and SET_CONT_RE.match(t)
+                    and not PAGE_NUM_RE.match(t)
+                    and t.lower() not in SKIP_SECTION_WORDS
+                    and t.lower() not in BG_SECTION_WORDS)
+
     # --- main loop ---
     for row in rows:
         if column_mode:
@@ -771,6 +810,16 @@ def assemble_schedule(rows, column_mode=False):
                     full_dt = full_data.get('date_text', '')
                     if full_dt and parse_date(full_dt):
                         evt_data['date_text'] = full_dt
+
+        # Set-name wrap: consume a continuation row that immediately follows a
+        # scene header (column mode only). Fires at most once per scene.
+        if expect_set_cont:
+            if (column_mode and evt_type == 'content' and current_scene is not None
+                    and current_scene.get('set') and _is_set_cont(s)):
+                current_scene['set'] = (current_scene['set'] + ' ' + s.strip()).strip()
+                expect_set_cont = False
+                continue
+            expect_set_cont = False
 
         # Accumulate show metadata from early content rows
         if meta_rows_seen < 20 and evt_type in ('content', 'noise'):
@@ -836,6 +885,7 @@ def assemble_schedule(rows, column_mode=False):
             }
             scene_committed = False
             in_bg = False
+            expect_set_cont = True   # next row may be a wrapped set-name continuation
 
         elif evt_type == 'intex':
             # Location line following a bare "Sc. N" header
