@@ -271,6 +271,11 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 .diff-day-badge{font-size:10px;color:var(--tmut);font-weight:400;margin-left:4px}
 .diff-old{font-size:11px;color:#e74c3c;margin-top:3px;font-style:italic}
 .diff-note{font-size:10px;color:var(--tfnt);margin-top:3px}
+.nm-conflict{border-color:rgba(231,111,81,0.45);cursor:default}
+.nm-choice{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:6px;font-size:12px;color:var(--t2)}
+.nm-choice label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.nm-choice input{accent-color:#e76f51}
+.nm-bulk{display:flex;gap:4px;align-items:center;font-size:10px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--tmut)}
 .diff-unchanged{font-size:11px;color:var(--tvfnt);padding:8px 10px;border-top:1px solid var(--bg-th);margin-top:4px}
 /* ── Toast ──────────────────────────────────────────────── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a7fc4;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;z-index:9999;white-space:nowrap}
@@ -1047,6 +1052,10 @@ function renderSetup(){
         <span>↓ Import Shooting Schedule</span>
         <input type="file" accept=".pdf" style="display:none" onchange="importPDF(event)">
       </label>
+      ${_nmOwner()?`<label class="btn btn-secondary btn-sm" style="cursor:pointer;margin-left:10px" title="Import (or update from) a Novie Magic schedule: in Novie Magic use Setup > Send to BG Board">
+        <span>↓ Import Novie Magic file</span>
+        <input type="file" accept=".json,application/json" style="display:none" onchange="importNovie(event)">
+      </label>`:''}
     </div>
   </div>
 
@@ -2930,6 +2939,287 @@ function applyDiff({diff, incoming}){
   _saveId=null; _saveName=null; // mark as unsaved after merge
   save(); closeModal(); currentTab='breakdown'; render(); updateNavInfo();
   showToast('Merge applied — breakdown updated');
+}
+
+// ══════════════════════════════════════════════════════════
+// IMPORT FROM NOVIE MAGIC (the scheduling app) — 2026-09-28
+// ══════════════════════════════════════════════════════════
+// Novie Magic exports a clean file (format "novie-magic.bgboard"): days, scenes and BG roles with its own ids
+// (scene.nmId, role.nmKey), so there's no PDF parsing. An empty board imports straight in. A board with scenes gets
+// a merge review: every imported scene/role remembers the values last imported (nmDay, nmSet, nmDesc, nmCount), so
+//   - changed only in the schedule  -> listed as a change (checkbox, on by default)
+//   - changed only here in BG Board -> left alone (your edit stands)
+//   - changed in both               -> a CONFLICT: you pick "Keep BG Board" or "Use schedule" (or set all at once)
+// Rates, tiers, hours, bumps, notes and stand-ins are never touched. Dropped scenes go to the Boneyard, not the trash.
+const NM_FORMAT='novie-magic.bgboard';
+// Owner-only (Ross 2026-09-28): Novie Magic is Ross's private app, so the import button shows only for him —
+// BG Board running on his own Mac, or the live site while he's signed in. Nobody else sees it.
+const NM_OWNER_EMAILS=['rossnovie@mac.com'];
+function _nmOwner(){
+  if(['localhost','127.0.0.1','[::1]'].includes(location.hostname)) return true;
+  try{
+    const u=window.__clerk&&window.__clerk.user;
+    const emails=(u&&u.emailAddresses||[]).map(e=>(e.emailAddress||'').toLowerCase());
+    return emails.some(e=>NM_OWNER_EMAILS.includes(e));
+  }catch(e){ return false; }
+}
+
+async function importNovie(e){
+  const f=e.target.files[0];
+  e.target.value='';
+  if(!f) return;
+  let inc;
+  try{ inc=JSON.parse(await f.text()); }catch(err){ alert("That file isn't a Novie Magic export (couldn't read it)."); return; }
+  if(!inc||inc.format!==NM_FORMAT){ alert('That file isn\'t a Novie Magic export. In Novie Magic use Setup > Send to BG Board.'); return; }
+  const incoming=_nmToBoard(inc);
+  const hasBoard=(state.days||[]).some(d=>(d.scenes||[]).length)||(state.boneyard||[]).length;
+  if(!hasBoard) _nmShowFresh(inc, incoming);
+  else _nmShowMerge(inc, incoming);
+}
+
+// Novie Magic export -> BG Board days/scenes/roles, stamped with the "last imported" values used for merging.
+function _nmToBoard(inc){
+  const dr=state.show.defaultRates||{};
+  const tier=state.show.contractType==='nonunion'?'nonunion':'sag';
+  const role=r=>({id:uid(), type:r.type, count:parseInt(r.count)||1, tier, baseRate:dr[tier]!==undefined?dr[tier]:182,
+    hours:8, bumps:[], notes:'', minors:!!r.minors, nmKey:r.nmKey, nmCount:parseInt(r.count)||1});
+  const scene=(sc,loc)=>({id:uid(), sceneId:sc.sceneId, set:sc.set||'', desc:sc.desc||'', roles:(sc.roles||[]).map(role),
+    nmId:sc.nmId, nmDay:loc, nmSet:sc.set||'', nmDesc:sc.desc||''});
+  return {
+    days:(inc.days||[]).map(d=>({id:uid(), dayNumber:d.dayNumber, date:d.date||'', scenes:(d.scenes||[]).map(sc=>scene(sc,d.dayNumber)), standinOff:{}, standinHours:{}})),
+    boneyard:(inc.boneyard||[]).map(sc=>scene(sc,'boneyard')),
+  };
+}
+function _nmShowName(inc){
+  const s=inc.show||{};
+  return s.episodeTitle?`${s.name} "${s.episodeTitle}"`:(s.name||'');
+}
+function _nmCounts(b){
+  const sc=b.days.reduce((n,d)=>n+d.scenes.length,0);
+  const roles=b.days.reduce((n,d)=>n+d.scenes.reduce((m,s)=>m+s.roles.length,0),0);
+  const heads=b.days.reduce((n,d)=>n+d.scenes.reduce((m,s)=>m+s.roles.reduce((k,r)=>k+r.count,0),0),0);
+  return {days:b.days.length, scenes:sc, roles, heads, parked:b.boneyard.length};
+}
+
+// ---------- fresh import (empty board) ----------
+function _nmShowFresh(inc, incoming){
+  const c=_nmCounts(incoming);
+  const tile=(n,l)=>`<div style="background:var(--bg-el);padding:10px;border-radius:4px;text-align:center"><div style="font-size:22px;font-weight:800">${n}</div><div style="font-size:10px;color:var(--tmut);text-transform:uppercase;letter-spacing:0.06em">${l}</div></div>`;
+  openModal(`
+    <div class="modal-title">Import from Novie Magic <button class="btn btn-ghost" onclick="closeModal()">✕</button></div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:12px">${esc(_nmShowName(inc))}${inc.show&&inc.show.episode?' · Ep '+esc(inc.show.episode):''} · board "${esc((inc.source||{}).board||'')}"</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">${tile(c.days,'Days')}${tile(c.scenes,'Scenes')}${tile(c.roles,'BG roles')}${tile(c.parked,'To Boneyard')}</div>
+    <div style="font-size:11px;color:var(--tmut);margin-bottom:14px">Straight from the schedule, no PDF parsing. Rates and tiers follow your Setup.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="_nmApplyFresh()">Import</button>
+    </div>`);
+  window._nmPending={inc, incoming};
+}
+function _nmApplyFresh(){
+  const {inc, incoming}=window._nmPending||{};
+  if(!incoming) return;
+  delete window._nmPending;
+  state.days=incoming.days;
+  state.boneyard=incoming.boneyard;
+  const s=inc.show||{};
+  if(!state.show.name) state.show.name=_nmShowName(inc);
+  if(!state.show.episode) state.show.episode=s.episode||'';
+  if(s.version) state.show.version=s.version;
+  state.show.nmSource=inc.source||{};
+  closeModal(); save(); currentTab='breakdown'; render(); updateNavInfo();
+  showToast(`Imported from Novie Magic: ${incoming.days.length} days`);
+}
+
+// ---------- merge (board already has scenes) ----------
+function _nmAllScenes(st){
+  const out=[];
+  (st.days||[]).forEach(d=>(d.scenes||[]).forEach(sc=>out.push({sc, loc:d.dayNumber, day:d})));
+  (st.boneyard||[]).forEach(sc=>out.push({sc, loc:'boneyard', day:null}));
+  return out;
+}
+const _nmLocLabel=l=>l==='boneyard'?'Boneyard':`Day ${l}`;
+// Pair this scene's roles with the schedule's: same Novie Magic element first; then same BG type (a count change in
+// Novie Magic renames the element, "4 doctors" -> "5 doctors"). Each role pairs once; roles you added here never do
+// unless their type matches a new schedule role.
+function _nmPairRoles(cur, inc){
+  const pairs=new Map(), used=new Set(), keys=new Set(inc.map(r=>r.nmKey));
+  const norm=t=>(t||'').trim().toLowerCase();
+  inc.forEach(r=>{ const m=cur.find(x=>!used.has(x.id)&&x.nmKey&&x.nmKey===r.nmKey); if(m){ pairs.set(r,m); used.add(m.id); } });
+  inc.forEach(r=>{ if(pairs.has(r)) return; const m=cur.find(x=>!used.has(x.id)&&(!x.nmKey||!keys.has(x.nmKey))&&norm(x.type)===norm(r.type)); if(m){ pairs.set(r,m); used.add(m.id); } });
+  return pairs;
+}
+
+function _nmDiff(cur, incoming){
+  const items=[];  // {group, conflict, title, sub, mine, theirs, apply(next, useSchedule)}
+  const curList=_nmAllScenes(cur), incList=_nmAllScenes(incoming);
+  const byId={}, byKey={};
+  curList.forEach(x=>{ if(x.sc.nmId) byId[x.sc.nmId]=x; byKey[_sceneKey(x.sc.sceneId)]=byKey[_sceneKey(x.sc.sceneId)]||x; });
+  const matched=new Set();
+  const three=(mine, base, theirs)=>{  // -> null (nothing to do) | 'change' | 'conflict'
+    if(String(theirs)===String(mine)) return null;
+    const hasBase=base!==undefined&&base!==null;
+    if(hasBase&&String(theirs)===String(base)) return null;        // only you changed it: yours stands
+    if(hasBase&&String(mine)!==String(base)) return 'conflict';    // both changed it
+    return 'change';
+  };
+  incList.forEach(({sc:n, loc:nLoc, day:nDay})=>{
+    const hit=(n.nmId&&byId[n.nmId])||(!byKey[_sceneKey(n.sceneId)]?.sc.nmId&&byKey[_sceneKey(n.sceneId)])||null;
+    const title=`Sc ${n.sceneId}`;
+    if(!hit||matched.has(hit.sc.id)){
+      items.push({group:'added', title, sub:`${n.set} · ${_nmLocLabel(nLoc)}${n.roles.length?` · ${n.roles.reduce((k,r)=>k+r.count,0)} BG`:''}`,
+        apply:next=>_nmPlace(next, JSON.parse(JSON.stringify(n)), nLoc, nDay)});
+      return;
+    }
+    matched.add(hit.sc.id);
+    const c=hit.sc, id=c.id;
+    // shoot day
+    const k=three(hit.loc, c.nmDay, nLoc);
+    if(k) items.push({group:k==='conflict'?'conflict':'moved', conflict:k==='conflict', title, sub:c.set,
+      mine:_nmLocLabel(hit.loc), theirs:_nmLocLabel(nLoc), was:_nmLocLabel(hit.loc),
+      apply:(next,use)=>{ if(use!==false){ const s=_nmTake(next,id); if(s) _nmPlace(next,s,nLoc,nDay); } }});
+    // set + description
+    [['set','nmSet','Set'],['desc','nmDesc','Description']].forEach(([f,b,label])=>{
+      const kk=three(c[f]||'', c[b], n[f]||'');
+      if(kk) items.push({group:kk==='conflict'?'conflict':'changed', conflict:kk==='conflict', title:`${title} · ${label}`, sub:'',
+        mine:c[f]||'—', theirs:n[f]||'—', was:c[f]||'—', apply:(next,use)=>{ if(use!==false){ const s=_nmFind(next,id); if(s) s[f]=n[f]||''; } }});
+    });
+    // BG roles
+    const seen=new Set(), pairs=_nmPairRoles(c.roles||[], n.roles);
+    n.roles.forEach(r=>{
+      const m=pairs.get(r);
+      if(!m){
+        items.push({group:'bgAdded', title, sub:`${r.count} × ${r.type}`,
+          apply:next=>{ const s=_nmFind(next,id); if(s) s.roles.push(JSON.parse(JSON.stringify(r))); }});
+        return;
+      }
+      seen.add(m.id);
+      const kk=three(parseInt(m.count)||1, m.nmCount, r.count);
+      if(kk) items.push({group:kk==='conflict'?'conflict':'bgCount', conflict:kk==='conflict', title:`${title} · ${m.type}`, sub:c.set,
+        mine:String(parseInt(m.count)||1), theirs:String(r.count), was:String(parseInt(m.count)||1),
+        apply:(next,use)=>{ if(use!==false){ const s=_nmFind(next,id); const x=s&&s.roles.find(q=>q.id===m.id); if(x) x.count=r.count; } }});
+    });
+    (c.roles||[]).forEach(m=>{
+      if(!m.nmKey||seen.has(m.id)) return;  // roles you added here stay
+      const yours=(m.bumps||[]).length||(m.notes||'').trim();
+      items.push({group:'bgRemoved', title:`${title} · ${m.type}`, sub:`${m.count} BG${yours?' · has your bumps/notes':''}`, off:!!yours,
+        apply:next=>{ const s=_nmFind(next,id); if(s) s.roles=s.roles.filter(q=>q.id!==m.id); },
+        keep:next=>{ const s=_nmFind(next,id); const x=s&&s.roles.find(q=>q.id===m.id); if(x) delete x.nmKey; }});  // kept: yours now
+    });
+  });
+  // scenes no longer in the schedule -> Boneyard
+  curList.forEach(({sc, loc})=>{
+    if(matched.has(sc.id)||loc==='boneyard') return;
+    items.push({group:'dropped', title:`Sc ${sc.sceneId}`, sub:`${sc.set} · was ${_nmLocLabel(loc)}`,
+      apply:next=>{ const s=_nmTake(next,sc.id); if(s) (next.boneyard=next.boneyard||[]).push(s); }});
+  });
+  // day dates
+  incoming.days.forEach(d=>{
+    const cd=(cur.days||[]).find(x=>x.dayNumber===d.dayNumber);
+    if(cd&&cd.date&&d.date&&cd.date!==d.date) items.push({group:'dates', title:`Day ${d.dayNumber}`, sub:'', was:cd.date, theirs:d.date,
+      apply:next=>{ const x=next.days.find(q=>q.dayNumber===d.dayNumber); if(x) x.date=d.date; }});
+  });
+  return items;
+}
+function _nmFind(next,id){ for(const d of next.days){ const s=d.scenes.find(x=>x.id===id); if(s) return s; } return (next.boneyard||[]).find(x=>x.id===id)||null; }
+function _nmTake(next,id){
+  for(const d of next.days){ const i=d.scenes.findIndex(x=>x.id===id); if(i>=0) return d.scenes.splice(i,1)[0]; }
+  const i=(next.boneyard||[]).findIndex(x=>x.id===id); return i>=0?next.boneyard.splice(i,1)[0]:null;
+}
+function _nmPlace(next, sc, loc, tmplDay){
+  if(loc==='boneyard'){ (next.boneyard=next.boneyard||[]).push(sc); return; }
+  let d=next.days.find(x=>x.dayNumber===loc);
+  if(!d){ d={id:uid(), dayNumber:loc, date:(tmplDay&&tmplDay.date)||'', scenes:[], standinOff:{}, standinHours:{}}; next.days.push(d); next.days.sort((a,b)=>a.dayNumber-b.dayNumber); }
+  d.scenes.push(sc);
+}
+
+const _NM_GROUPS=[
+  ['conflict','Conflicts: changed here AND in the schedule','#e76f51'],
+  ['added','New scenes','#2ecc71'],
+  ['moved','Moved to a different day','#e9c46a'],
+  ['dropped','No longer in the schedule: move to Boneyard','#e74c3c'],
+  ['bgAdded','New BG in the schedule','#2ecc71'],
+  ['bgCount','BG count changed in the schedule','#3a7bd5'],
+  ['bgRemoved','BG no longer in the schedule','#e74c3c'],
+  ['changed','Set / description changed','#3a7bd5'],
+  ['dates','Shoot dates changed','#9b8bd4'],
+];
+function _nmShowMerge(inc, incoming){
+  const items=_nmDiff(state, incoming);
+  window._nmMerge={inc, incoming, items};
+  if(!items.length){
+    openModal(`<div class="modal-title">Novie Magic: no changes</div>
+      <p style="color:var(--tfnt);margin:16px 0">This export matches your breakdown. Nothing to update.</p>
+      <div style="text-align:right"><button class="btn btn-primary" onclick="_nmApplyMerge()">OK</button></div>`);
+    return;
+  }
+  const rows=_NM_GROUPS.map(([g,label,color])=>{
+    const list=items.map((it,i)=>({it,i})).filter(x=>x.it.group===g);
+    if(!list.length) return '';
+    const body=list.map(({it,i})=>{
+      if(it.conflict) return `<div class="diff-row nm-conflict">
+        <div class="diff-row-body"><div class="diff-row-title">${esc(it.title)} <span class="diff-day-badge">${esc(it.sub||'')}</span></div>
+          <div class="nm-choice">
+            <label><input type="radio" name="nm-${i}" value="mine" checked onchange="updateNmCount()"> Keep BG Board: <b>${esc(it.mine)}</b></label>
+            <label><input type="radio" name="nm-${i}" value="theirs" onchange="updateNmCount()"> Use schedule: <b>${esc(it.theirs)}</b></label>
+          </div></div></div>`;
+      const detail=it.was!==undefined&&it.theirs!==undefined?`<div class="diff-old">was: ${esc(it.was)} → now: ${esc(it.theirs)}</div>`:'';
+      return `<label class="diff-row"><input type="checkbox" id="nm-${i}" ${it.off?'':'checked'} onchange="updateNmCount()">
+        <div class="diff-row-body"><div class="diff-row-title">${esc(it.title)} <span class="diff-day-badge">${esc(it.sub||'')}</span></div>${detail}</div></label>`;
+    }).join('');
+    const bulk=g==='conflict'
+      ?`<span class="nm-bulk">All: <button class="btn btn-ghost btn-xs" onclick="_nmSetAll('mine')">Keep BG Board</button><button class="btn btn-ghost btn-xs" onclick="_nmSetAll('theirs')">Use schedule</button></span>`
+      :`<span class="nm-bulk"><button class="btn btn-ghost btn-xs" onclick="_nmCheckGroup('${g}',true)">All</button><button class="btn btn-ghost btn-xs" onclick="_nmCheckGroup('${g}',false)">None</button></span>`;
+    return `<div class="diff-section" data-nm-group="${g}"><div class="diff-section-hdr" style="color:${color};display:flex;justify-content:space-between;align-items:center">${label} (${list.length})${bulk}</div>${body}</div>`;
+  }).join('');
+  const nc=items.filter(x=>x.conflict).length;
+  openModal(`
+    <div class="modal-title">Update from Novie Magic <button class="btn btn-ghost" onclick="closeModal()">✕</button></div>
+    <div style="font-size:12px;color:var(--tvfnt);margin-bottom:6px">${esc(_nmShowName(inc))} · board "${esc((inc.source||{}).board||'')}" · exported ${esc(((inc.source||{}).exported||'').replace('T',' '))}</div>
+    <div style="font-size:12px;color:var(--tfnt);margin-bottom:12px">Your rates, tiers, bumps, notes and stand-ins stay as they are.${nc?` <b style="color:#e76f51">${nc} conflict${nc===1?'':'s'}</b>: pick which to keep.`:''}</div>
+    <div class="diff-list" id="nm-list">${rows}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+      <button class="btn btn-danger" onclick="closeModal()">Cancel: keep current</button>
+      <button class="btn btn-primary" id="nm-apply-btn" onclick="_nmApplyMerge()">Apply <span id="nm-count"></span></button>
+    </div>`);
+  updateNmCount();
+}
+function _nmSetAll(v){ document.querySelectorAll('#nm-list .nm-conflict input[value="'+v+'"]').forEach(r=>{r.checked=true;}); updateNmCount(); }
+function _nmCheckGroup(g,on){ document.querySelectorAll(`[data-nm-group="${g}"] input[type=checkbox]`).forEach(c=>{c.checked=on;}); updateNmCount(); }
+function updateNmCount(){
+  const {items}=window._nmMerge||{items:[]};
+  let n=0;
+  items.forEach((it,i)=>{
+    if(it.conflict){ const r=document.querySelector(`input[name="nm-${i}"]:checked`); if(r&&r.value==='theirs') n++; }
+    else { const c=document.getElementById(`nm-${i}`); if(c&&c.checked) n++; }
+  });
+  const el=document.getElementById('nm-count'); if(el) el.textContent=`${n} change${n===1?'':'s'}`;
+}
+function _nmApplyMerge(){
+  const {inc, incoming, items}=window._nmMerge||{};
+  if(!incoming) return;
+  const next=JSON.parse(JSON.stringify(state));
+  if(!Array.isArray(next.boneyard)) next.boneyard=[];
+  items.forEach((it,i)=>{
+    if(it.conflict){ const r=document.querySelector(`input[name="nm-${i}"]:checked`); if(r&&r.value==='theirs') it.apply(next,true); }
+    else { const c=document.getElementById(`nm-${i}`); if(!c||c.checked) it.apply(next); else if(it.keep) it.keep(next); }
+  });
+  // Remember what the schedule said this time (the base for the next merge), whatever you chose.
+  const incById={}; _nmAllScenes(incoming).forEach(x=>{ if(x.sc.nmId) incById[x.sc.nmId]=x; });
+  _nmAllScenes(next).forEach(({sc})=>{
+    let n=sc.nmId&&incById[sc.nmId];
+    if(!n){ const k=_nmAllScenes(incoming).find(x=>_sceneKey(x.sc.sceneId)===_sceneKey(sc.sceneId)); if(k&&!sc.nmId){ n=k; sc.nmId=k.sc.nmId; } }
+    if(!n) return;
+    sc.nmDay=n.loc; sc.nmSet=n.sc.set; sc.nmDesc=n.sc.desc;
+    const pairs=_nmPairRoles(sc.roles||[], n.sc.roles||[]);
+    (n.sc.roles||[]).forEach(r=>{ const m=pairs.get(r); if(m){ m.nmKey=r.nmKey; m.nmCount=r.count; } });
+  });
+  next.days=next.days.filter(d=>d.scenes.length>0);
+  next.show.nmSource=inc.source||{};
+  state=next;
+  delete window._nmMerge;
+  closeModal(); save(); currentTab='breakdown'; render(); updateNavInfo();
+  showToast('Updated from Novie Magic');
 }
 
 async function importPDF(e){
