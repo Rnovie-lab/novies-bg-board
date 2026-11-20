@@ -317,6 +317,9 @@ tr.no-roles-row:hover td{color:var(--tlbl)!important;background:var(--bg-th)!imp
 .project-card-rename{position:absolute;bottom:10px;left:42px;background:transparent;border:none;color:var(--tmut);cursor:pointer;padding:4px 8px;border-radius:3px;font-size:12px;line-height:1;opacity:0;transition:opacity 0.15s}
 .project-card:hover .project-card-rename{opacity:1}
 .project-card-rename:hover{color:#2a7fc4;background:rgba(42,127,196,0.1)}
+.project-card-dup{position:absolute;bottom:10px;left:108px;background:transparent;border:none;color:var(--tmut);cursor:pointer;padding:4px 8px;border-radius:3px;font-size:12px;line-height:1;opacity:0;transition:opacity 0.15s}
+.project-card:hover .project-card-dup{opacity:1}
+.project-card-dup:hover{color:#2a7fc4;background:rgba(42,127,196,0.1)}
 .project-card-logo{position:absolute;top:10px;right:10px;max-width:50px;max-height:34px;border-radius:3px;object-fit:contain;opacity:0.92;pointer-events:none}
 .beta-pill{font-size:10px;font-weight:700;letter-spacing:0.08em;color:#2a7fc4;background:rgba(42,127,196,0.1);padding:2px 7px;border-radius:3px;line-height:1.4;white-space:nowrap;align-self:center;pointer-events:none;user-select:none}
 </style>
@@ -766,6 +769,7 @@ function _redrawDashboardCards(){
     return `<div class="project-card" onclick="_openFromDashboard('${sv.id}')">
       <button class="project-card-trash" onclick="event.stopPropagation();_deleteFromDashboard('${sv.id}','${esc(sv.name).replace(/'/g,"\\'")}')" title="Delete project">🗑</button>
       <button class="project-card-rename" onclick="event.stopPropagation();_renameFromDashboard('${sv.id}','${esc(sv.name).replace(/'/g,"\\'")}')" title="Rename project">edit title</button>
+      <button class="project-card-dup" onclick="event.stopPropagation();_duplicateFromDashboard('${sv.id}')" title="Make a copy of this project">duplicate</button>
       ${logoHtml}
       <div class="project-card-name">${esc(sv.name||'Untitled')}</div>
       <div class="project-card-sub">${esc(subtitle||'no show info')}</div>
@@ -786,6 +790,20 @@ async function _deleteFromDashboard(id,name){
     await _refreshDashboard();
   }catch(e){
     alert('Delete failed: '+e.message);
+  }
+}
+async function _duplicateFromDashboard(id){
+  try{
+    const res=await fetch(`/saves/${id}/duplicate`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({savedAt:new Date().toISOString()})
+    });
+    const j=await res.json();
+    if(!res.ok||!j.ok) throw new Error(j.error||'Duplicate failed');
+    await _refreshDashboard();
+  }catch(e){
+    alert('Duplicate failed: '+e.message);
   }
 }
 async function _renameFromDashboard(id,currentName){
