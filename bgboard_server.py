@@ -19,6 +19,7 @@ import uuid
 import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import unquote
 import webbrowser
 import threading
 
@@ -58,6 +59,48 @@ SAVES_DIR    = Path(os.environ.get('BGBOARD_SAVES_DIR', str(SERVER_DIR / 'saves'
 USAGE_FILE   = SERVER_DIR / 'usage_counter.json'
 PORT = int(os.environ.get('PORT', 8765))
 IS_LOCAL = PORT == 8765  # running locally vs hosted
+
+# ── Static files: only the app's own pages and pictures ──────────────────
+# The static part of do_GET used to join any asked-for path onto SERVER_DIR
+# and send the file: the server's own code, the usage counter, a saved board
+# (around the sign-in check on /saves/<id>), and with ".." or a link, files
+# outside the folder. Now a request gets a file only if it is one plain name,
+# ends in one of these page types, and really sits in the app folder.
+# No .json on purpose: saved boards and the usage counter are .json.
+STATIC_TYPES = {
+    '.html': 'text/html; charset=utf-8',
+    '.css':  'text/css; charset=utf-8',
+    '.js':   'text/javascript; charset=utf-8',
+    '.png':  'image/png',
+    '.jpg':  'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg':  'image/svg+xml',
+    '.ico':  'image/x-icon',
+}
+
+
+def _static_file(name):
+    """The file a static request for `name` may get, or None.
+
+    `name` is the request path after the leading slashes, still %-encoded.
+    """
+    try:
+        name = unquote(name or '', errors='strict')
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not name or name.startswith('.') or any(c in name for c in ('/', '\\', '\x00')):
+        return None
+    if Path(name).suffix.lower() not in STATIC_TYPES:
+        return None
+    try:
+        root = SERVER_DIR.resolve()
+        real = (root / name).resolve()
+    except (OSError, ValueError):
+        return None
+    # resolve() follows links, so a link that points elsewhere fails here.
+    if real.parent != root or not real.is_file():
+        return None
+    return real
 
 # ── Clerk auth ────────────────────────────────────────────────────────────────
 # Verifies Clerk session JWTs locally via JWKS — no Clerk API round-trip per
@@ -193,14 +236,11 @@ class BGBoardHandler(BaseHTTPRequestHandler):
         if path == 'usage':
             self.send_json({'count': _read_usage()}); return
         # ── Static files ───────────────────────────────────────
-        file_path = SERVER_DIR / path
-        if not file_path.exists() or not file_path.is_file():
+        file_path = _static_file(path)
+        if file_path is None:
             self.send_response(404); self.end_headers()
             return
-        suffix = file_path.suffix.lower()
-        types = {'.html':'text/html','.js':'text/javascript',
-                 '.css':'text/css','.json':'application/json'}
-        ctype = types.get(suffix, 'application/octet-stream')
+        ctype = STATIC_TYPES[file_path.suffix.lower()]
         data = file_path.read_bytes()
         self.send_response(200)
         self.send_header('Content-Type', ctype)
